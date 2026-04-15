@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal Talento | BETA</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Supabase JS CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <link rel="icon" type="image/png" href="assets/logo-beta-top.png">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <!-- Google Fonts: Outfit (Premium & Modern) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2"></script>
+    <link rel="stylesheet" href="styles.css?v=4">
+
+</head>
+<body>
+    <!-- Pantalla de Login (Agroindustrial Beta) -->
+    <div id="loginScreen" class="login-overlay">
+        <div class="login-card">
+            <div class="login-header">
+                <img src="assets/logo-beta-top.png" alt="Beta Logo" class="login-logo-img" style="max-height: 80px; object-fit: contain; margin-bottom: 1rem;" onerror="this.outerHTML='<i class=\'ph ph-plant\' style=\'font-size: 3.5rem; color: var(--accent-color); background: #f8fafc; padding: 1rem; border-radius: 16px; margin-bottom: 1rem; border: 1px solid #e2e8f0;\'></i>'">
+                <h2>Portal Talento</h2>
+                <p>Gestión y Desarrollo Humano - Beta</p>
+            </div>
+            <form id="loginForm" class="login-form">
+                <div class="form-group">
+                    <label for="loginEmail">Correo Electrónico</label>
+                    <div class="input-icon-wrapper">
+                        <i class="ph ph-envelope"></i>
+                        <input type="email" id="loginEmail" placeholder="usuario@beta.com.pe" required autocomplete="email">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="loginPassword">Contraseña</label>
+                    <div class="input-icon-wrapper">
+                        <i class="ph ph-lock-key"></i>
+                        <input type="password" id="loginPassword" placeholder="••••••••" required autocomplete="current-password">
+                    </div>
+                </div>
+                <div id="loginErrorMsg" class="login-error-msg" style="display: none;"></div>
+                <button type="submit" id="loginSubmitBtn" class="login-submit-btn">
+                    <span>Iniciar Sesión</span>
+                    <i class="ph ph-sign-in"></i>
+                </button>
+            </form>
+            <div class="login-footer">
+                <p>Uso exclusivo del personal autorizado.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="dashboard-layout" id="dashboardLayout" style="display: none;">
+        <!-- Cabecera Móvil (Visible solo en mobile) -->
+        <div class="mobile-top-bar">
+            <button id="hamburgerBtn" class="hamburger-btn">
+                <i class="ph ph-list"></i>
+            </button>
+            <div class="mobile-logo">
+                <img src="assets/logo-beta-top.png" alt="Beta" style="height: 24px;">
+                <span>Portal Talento</span>
+            </div>
+            <div style="width: 40px;"></div> <!-- Espaciador -->
+        </div>
+
+        <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+        <!-- Sidebar Navegación -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo-icon-wrapper">
+                    <i class="ph ph-users logo-icon" id="sidebarLogo"></i>
+                </div>
+                <div class="logo-text">
+                    <span class="logo-name">Portal Talento</span>
+                    <span class="logo-subtitle">Beta | RR.HH.</span>
+                </div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="nav-section">
+                    <span class="nav-section-title">Directorio Inteligente</span>
+                    <button class="nav-btn active" data-view="trabajador">
+                        <i class="ph ph-users"></i>
+                        Trabajadores
+                    </button>
+                </div>
+
+                <div class="nav-section">
+                    <span class="nav-section-title">Estructura Operativa</span>
+                    <button class="nav-btn" data-view="operacion">
+                        <i class="ph ph-wrench"></i>
+                        Subgerencias
+                    </button>
+                    <button class="nav-btn" data-view="fundo_gnrl">
+                        <i class="ph ph-tree"></i>
+                        Fundos Generales
+                    </button>
+                    <button class="nav-btn" data-view="fundo">
+                        <i class="ph ph-leaf"></i>
+                        Fundos Específicos
+                    </button>
+                    <button class="nav-btn" data-view="fundo_lote">
+                        <i class="ph ph-squares-four"></i>
+                        Lotes Producción
+                    </button>
+                </div>
+
+                <div class="nav-section">
+                    <span class="nav-section-title">Configuración Técnica</span>
+                    <button class="nav-btn" data-view="actividad">
+                        <i class="ph ph-list-checks"></i>
+                        Actividades AGT
+                    </button>
+                    <button class="nav-btn" data-view="labor">
+                        <i class="ph ph-plant"></i>
+                        Labores Beta
+                    </button>
+                    <button class="nav-btn" data-view="precio">
+                        <i class="ph ph-currency-dollar"></i>
+                        Tarifas y Precios
+                    </button>
+                    <button class="nav-btn" data-view="agritracer">
+                        <i class="ph ph-chart-bar"></i>
+                        Métricas Agritracer
+                    </button>
+                </div>
+
+                <div class="nav-section user-section" style="margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--border-color);">
+                    <div class="user-info" style="display: flex; align-items: center; gap: 0.75rem; padding: 0.5rem 1rem; margin-bottom: 0.5rem;">
+                        <div style="background:var(--accent-color); color:white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold;">
+                            <i class="ph ph-user"></i>
+                        </div>
+                        <div style="font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis;">
+                            <div style="font-weight: 600; color: var(--text-primary);" id="currentUserEmail">Cargando...</div>
+                            <div style="color: var(--text-secondary); font-size: 0.7rem;">Sede Chulucanas</div>
+                        </div>
+                    </div>
+                    <button class="nav-btn logout-btn" id="logoutBtn" style="color: #ef4444;">
+                        <i class="ph ph-sign-out"></i>
+                        Cerrar Sesión
+                    </button>
+                </div>
+            </nav>
+        </aside>
+
+        <!-- Contenedor Principal (Derecha) -->
+        <div class="main-wrapper">
+            <!-- Encabezado de la página (Contextual) -->
+            <header class="header" id="globalHeader">
+                <div class="header-info">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <div class="logo-icon-wrapper" style="background: #eff6ff; padding: 0.4rem; border-radius: 8px;">
+                            <i class="ph ph-users logo-icon" id="mainIcon" style="font-size: 1.25rem; color: var(--primary-color);"></i>
+                        </div>
+                        <div>
+                            <h1 id="mainTitle" style="margin:0; font-size: 1.25rem;">Gestión de Trabajadores</h1>
+                            <p class="subtitle" id="mainSubtitle" style="margin:0; font-size: 0.8rem; opacity: 0.8;">Análisis de Talento e Inteligencia Operativa</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="header-actions" id="headerKPIs">
+                    <!-- KPIs compactos e inteligentes se inyectan aquí dinámicamente -->
+                </div>
+            </header>
+
+            <!-- Dashboard de Métricas de Trabajadores integrado en Header vía JS -->
+
+
+            <!-- Contenido Dinámico -->
+            <main class="main-content">
+                <!-- Vistas de Operaciones, Ranking, Tablas, etc. (Contenido actual) -->
+                <div id="cardsContainer" class="cards-container" style="display: none;">
+                    <div id="subgerenciaHub" class="subgerencia-hub">
+                        <!-- Se llena dinámicamente desde app.js para un efecto de alto impacto -->
+                    </div>
+                    <div id="subgerenciaDetailHub" class="subgerencia-hub" style="display: none; grid-template-columns: 1fr;">
+                        <!-- Nuevo nivel jerárquico 2: Dashboard de la Subgerencia seleccionada -->
+                    </div>
+                    <div id="fundoGnrlHub" class="subgerencia-hub" style="display: none; grid-template-columns: 1fr;">
+                        <div id="fundoGnrlFilterBar"></div>
+                        <div id="fundoGnrlIndicator"></div>
+                        <div id="fundoGnrlCardsGrid" class="subgerencia-hub" style="margin-top: 0;"></div>
+                    </div>
+                    <div id="fundoHub" class="subgerencia-hub" style="display: none; grid-template-columns: 1fr;">
+                        <div id="fundoFilterBar"></div>
+                        <div id="fundoIndicator"></div>
+                        <div id="fundoCardsGrid" class="subgerencia-hub" style="margin-top: 0;"></div>
+                    </div>
+                    <div id="loteHub" class="subgerencia-hub" style="display: none; grid-template-columns: 1fr;">
+                        <div id="loteFilterBar"></div>
+                        <div id="loteIndicator"></div>
+                        <div id="loteCardsGrid" class="subgerencia-hub" style="margin-top: 0;"></div>
+                    </div>
+                </div>
+
+
+                <div id="tabStats" class="stats-grid-container" style="display: none;">
+                    <div class="stats-charts-side"><canvas id="activityChart"></canvas></div>
+                    <div id="statsCards" class="stats-cards-side"></div>
+                </div>
+
+                <!-- Barra de Herramientas Unificada (Ultra-Compacta) -->
+                <div id="unifiedControlsContainer" class="modern-toolbar" style="display: none; margin-bottom: 0.75rem;">
+                    <div class="toolbar-right" style="width: 100%; display: flex; justify-content: flex-end;">
+                        <div id="globalSearchBox" class="toolbar-search">
+                            <i class="ph ph-magnifying-glass"></i>
+                            <input type="text" id="searchInputGlobal" placeholder="Buscar..." autocomplete="off">
+                            <div id="searchSuggestionsGlobal" class="search-suggestions-dropdown"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filtros para Tarifas y Precios (Jerárquicos) -->
+                <div id="priceFiltersContainer" class="ranking-filters-container" style="display: none; margin-bottom: 2rem; background: rgba(0, 75, 147, 0.02); border: 1px solid rgba(0, 75, 147, 0.1); border-radius: 12px; padding: 1.25rem;">
+                    <div class="price-filters-row">
+                        <div class="filter-group">
+                            <label class="stat-label" style="display:block; margin-bottom:0.5rem;">1. Buscar Actividad</label>
+                            <div class="search-box">
+                                <i class="ph ph-magnifying-glass"></i>
+                                <input type="text" id="searchInput" placeholder="Escribe el nombre de la actividad..." autocomplete="off">
+                                <div id="searchSuggestions" class="search-suggestions-dropdown"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="filter-group">
+                            <label class="stat-label" style="display:block; margin-bottom:0.5rem;">2. Seleccionar Lote</label>
+                            <select id="priceFilterLote" class="ranking-year-select" onchange="currentPage=0; fetchData();" style="width: 100%;">
+                                <option value="all">Todos los Lotes</option>
+                            </select>
+                        </div>
+
+                        <!-- Semana removed per redesign -->
+                        
+                        <div class="filter-group" style="align-self: flex-end;">
+                            <button onclick="resetPriceFilters()" class="clear-filter-btn" style="display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 1.5rem; border-radius: 10px; border: 1px solid #cbd5e1; background: white; color: #64748b; font-weight: 600; cursor: pointer; transition: all 0.2s;">
+                                <i class="ph ph-arrows-clockwise" style="margin-right: 0.5rem;"></i> Limpiar Filtros
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Dashboard de Precios Evolutivo -->
+                <div id="priceChartWrapper" class="price-chart-wrapper" style="display: none; background: white; border-radius: 12px; padding: 1.5rem; margin-bottom: 2rem; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06); border: 1px solid var(--border-color);">
+                    <div id="priceChartEmptyState" class="empty-state">
+                        <i class="ph-duotone ph-chart-line-up" style="font-size: 3rem; color: var(--primary-color); margin-bottom: 1rem;"></i>
+                        <h3 style="margin-bottom: 0.5rem; color: var(--text-primary);">Análisis Evolutivo</h3>
+                        <p>Busca y selecciona una <strong>Actividad</strong> en los filtros superiores para desplegar el historial de precios.</p>
+                    </div>
+                    <div id="priceChartContent" style="display: none;">
+                        <h3 style="margin-bottom: 1.5rem; color: var(--text-primary); font-size: 1.1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">Evolución Cronológica de Tarifas</h3>
+                        <div style="position: relative; height: 350px; width: 100%;">
+                            <canvas id="priceEvolutionChart"></canvas>
+                        </div>
+                        <div id="priceLatestKPIs" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1.5rem;">
+                            <!-- Dinámico -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- DASHBOARD DE MÉTRICAS AGRITRACER -->
+                <div id="agtMetricsContainer" style="display: none;" class="agt-dashboard-section">
+                    <div class="glass-panel" style="display: flex; align-items: stretch; gap: 1.25rem; padding: 0.75rem 1.25rem; margin-bottom: 1rem; border-radius: 16px;">
+                        <!-- Bloque de Filtros (Izquierda) -->
+                        <div style="display: flex; flex-direction: column; justify-content: center; gap: 0.5rem; padding-right: 1.5rem; border-right: 1px solid var(--glass-border); flex-shrink: 0;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <label class="stat-label" style="font-size: 0.6rem; opacity: 0.7; min-width: 40px;">Año</label>
+                                <select id="agtFilterYear" class="ranking-year-select" style="min-width: 70px; background: white; border-radius: 6px; padding: 0.2rem 0.4rem; font-size: 0.8rem;">
+                                    <option value="2024">2024</option>
+                                    <option value="2025">2025</option>
+                                    <option value="2026" selected>2026</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <label class="stat-label" style="font-size: 0.6rem; opacity: 0.7; min-width: 40px;">Sem.</label>
+                                <input type="number" id="agtFilterWeek" class="ranking-year-select" min="1" max="53" style="min-width: 70px; padding: 0.2rem 0.4rem; border-radius: 6px; font-size: 0.8rem;">
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <label class="stat-label" style="font-size: 0.6rem; opacity: 0.7; min-width: 40px;">Día</label>
+                                <input type="date" id="agtFilterDate" class="ranking-year-select" style="min-width: 125px; padding: 0.2rem 0.4rem; border-radius: 6px; font-size: 0.8rem;">
+                            </div>
+                        </div>
+
+                        <!-- Bloque de KPIs (Derecha) -->
+                        <div id="agtKPIs" class="stats-grid-container" style="flex: 1; margin: 0; padding: 0;">
+                            <!-- Inyectado vía JS -->
+                        </div>
+                    </div>
+
+                    <!-- NUEVO: GRÁFICO DE ASISTENCIA DIARIA -->
+                    <div style="display: grid; grid-template-columns: 2.5fr 1.3fr 1fr; gap: 0.75rem; margin-bottom: 0.75rem;">
+                        
+                        <!-- Evolución de Asistencia Diaria -->
+                        <div class="stat-card" style="display: flex; flex-direction: column; height: 310px; padding: 1rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+                                <h3 style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 800; letter-spacing: 0.05em;">Evolución de Asistencia Diaria</h3>
+                                <div style="width: 8px; height: 8px; border-radius: 50%; background: #4ade80; box-shadow: 0 0 6px #4ade80;"></div>
+                            </div>
+                            <div style="flex: 1; position: relative; width: 100%; min-height: 0; min-width: 0;">
+                                <canvas id="agtAttendanceChart" style="width: 100%; height: 100%;"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Detalles de Asistencia Diaria -->
+                        <div class="stat-card" style="display: flex; flex-direction: column; padding: 0.75rem; height: 310px;">
+                            <h3 style="font-size: 0.7rem; margin-bottom: 0.75rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Detalles de Asistencia Diaria</h3>
+                            <div class="table-wrapper" style="flex: 1; overflow-y: auto; border-radius: 6px; border: 1px solid var(--border-color);">
+                                <table style="width: 100%; font-size: 0.75rem; text-align: left; border-collapse: collapse;">
+                                    <thead style="position: sticky; top: 0; background: #f8fafc; z-index: 10;">
+                                        <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-secondary);">
+                                            <th style="padding: 0.5rem; border-bottom: 1px solid var(--border-color);">Fecha</th>
+                                            <th style="padding: 0.5rem; text-align: center; border-bottom: 1px solid var(--border-color);">Asistentes</th>
+                                            <th style="padding: 0.5rem; text-align: center; border-bottom: 1px solid var(--border-color);">Variación</th>
+                                            <th style="padding: 0.5rem; text-align: center; color: #ef4444; border-bottom: 1px solid var(--border-color);">Ausentes</th>
+                                            <th style="padding: 0.5rem; text-align: center; color: #3b82f6; border-bottom: 1px solid var(--border-color);">Retornos</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="agtDailyAttendanceTable">
+                                        <!-- Inyectado vía JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <!-- Concentración por Fundo -->
+                        <div class="stat-card" style="display: flex; flex-direction: column; height: 310px; padding: 0.75rem;">
+                            <h3 style="font-size: 0.7rem; margin-bottom: 0.75rem; color: var(--text-secondary); text-transform: uppercase; font-weight: 700;">Concentración por Fundo</h3>
+                            <div style="flex: 1; position: relative; width: 100%; min-height: 0; min-width: 0;">
+                                <canvas id="agtFundoChart" style="width: 100%; height: 100%;"></canvas>
+                            </div>
+                        </div>
+                    </div> <!-- Fin de agtMetricsContainer Grid Group -->
+
+                <!-- Tabla Principal -->
+                <div id="tableContainer" class="table-container">
+                    <!-- El buscador y controles ahora están en unifiedControlsContainer -->
+
+
+                    <!-- Botones de Acción (Contextuales) -->
+                    <div id="laborActions" class="table-actions-container" style="display: none;">
+                        <button class="action-btn-primary" onclick="openLaborModal()">
+                            <i class="ph ph-plus-circle"></i> Nueva Labor
+                        </button>
+                    </div>
+                    <div id="priceActions" class="table-actions-container" style="display: none;">
+                        <button class="action-btn-primary" onclick="openPriceModal()">
+                            <i class="ph ph-currency-dollar"></i> Nuevo Precio
+                        </button>
+                    </div>
+
+                    <div class="table-wrapper">
+                        <table id="dataTable">
+                            <thead id="tableHead"></thead>
+                            <tbody id="tableBody"></tbody>
+                        </table>
+                    </div>
+
+                    <div class="pagination">
+                        <button id="prevBtn" class="pagination-btn" disabled><i class="ph ph-caret-left"></i> Anterior</button>
+                        <span id="pageInfo">Página 1</span>
+                        <button id="nextBtn" class="pagination-btn" disabled>Siguiente <i class="ph ph-caret-right"></i></button>
+                    </div>
+                </div>
+
+                <!-- Perfil Detallado del Trabajador -->
+                <div id="workerProfileContainer" class="worker-profile-view" style="display: none;">
+                    <div class="profile-sticky-wrapper">
+                        <!-- Búsqueda Integrada -->
+                        <div class="profile-toolbar">
+                            <button id="closeProfileBtn" class="action-btn icon-btn back-btn" title="Volver a la Lista">
+                                <i class="ph ph-arrow-left"></i>
+                            </button>
+                            <div class="search-box profile-search-box">
+                                <i class="ph ph-magnifying-glass"></i>
+                                <input type="text" id="profileSearchInput" placeholder="Buscar a otro trabajador...">
+                            </div>
+                        </div>
+
+                        <!-- Hero Banner -->
+                        <div class="hero-banner">
+                            <div class="hero-content">
+                                <div class="hero-avatar">
+                                    <i class="ph ph-user"></i>
+                                </div>
+                                <div class="hero-info">
+                                    <h2 id="profileWorkerName" class="hero-name">Cargando...</h2>
+                                    <p id="profileWorkerRole" class="hero-role">Información del Trabajador</p>
+                                    <div class="hero-tags">
+                                        <span id="profileWorkerDni" class="hero-tag"><i class="ph ph-identification-card"></i> -</span>
+                                        <span id="profileWorkerCode" class="hero-tag"><i class="ph ph-hash"></i> -</span>
+                                        <span id="profileWorkerPhone" class="hero-tag"><i class="ph ph-phone"></i> -</span>
+                                        <span id="profileWorkerProcedencia" class="hero-tag"><i class="ph ph-map-pin"></i> -</span>
+                                        <span id="profileWorkerGenero" class="hero-tag"><i class="ph ph-gender-intersex"></i> -</span>
+                                    </div>
+                                </div>
+                                <div class="hero-actions">
+                                    <button class="hero-btn btn-primary" id="btnCall" title="Llamar" style="display: none;">
+                                        <i class="ph ph-phone-call"></i> Llamar
+                                    </button>
+                                    <button class="hero-btn btn-whatsapp" id="btnWhatsapp" title="Enviar WhatsApp" style="display: none;">
+                                        <i class="ph ph-whatsapp-logo"></i> WhatsApp
+                                    </button>
+                                    <button class="hero-btn" id="btnEditProfile" title="Editar Perfil" style="background: #f1f5f9; color: var(--text-primary); border: 1px solid var(--border-color);">
+                                        <i class="ph ph-user-circle-gear"></i> Editar Datos
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Pestañas (Tabs) -->
+                        <div class="profile-tabs-container">
+                            <ul class="profile-tabs">
+                                <li class="tab-item active" data-tab="tab-resumen">Resumen General</li>
+                                <li class="tab-item" data-tab="tab-rendimientos">Rendimientos</li>
+                                <li class="tab-item" data-tab="tab-asistencia">Asistencia Anual</li>
+                                <li class="tab-item" data-tab="tab-labores">Labores Técnicas</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Contenido del Perfil -->
+                    <div class="profile-body">
+                        <!-- Tab 1: Resumen -->
+                        <div id="tab-resumen" class="tab-content active">
+                            <div class="modal-grid-layout">
+                                <div class="modal-section">
+                                    <h3 class="section-title">Resumen de Actividad Anual</h3>
+                                    
+                                    <!-- Cabecera de Métricas Rápidas -->
+                                    <div class="profile-resumen-header" id="profileSummaryHeader" style="display: none;">
+                                        <div class="mini-stat-box">
+                                            <div class="mini-stat-icon" style="background: #eff6ff; color: #3b82f6;"><i class="ph ph-calendar-check"></i></div>
+                                            <div class="mini-stat-info">
+                                                <span class="mini-stat-label">Total Jornales</span>
+                                                <span class="mini-stat-value" id="totalJornalesLabel">-</span>
+                                            </div>
+                                        </div>
+                                        <div class="mini-stat-box">
+                                            <div class="mini-stat-icon" style="background: #fff7ed; color: #f59e0b;"><i class="ph ph-trend-up"></i></div>
+                                            <div class="mini-stat-info">
+                                                <span class="mini-stat-label">Año Récord</span>
+                                                <span class="mini-stat-value" id="peakYearLabel">-</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- Gráfico de Tendencia -->
+                                    <div class="profile-chart-wrapper" id="profileChartWrapper" style="display: none;">
+                                        <canvas id="workerActivityChart"></canvas>
+                                    </div>
+
+                                    <div id="jornalesContainer" class="jornales-grid" style="display: none; margin-top: 1rem;"></div>
+                                    <div id="noJornalesMessage" class="empty-state" style="display: none;">
+                                        <i class="ph ph-calendar-x"></i>
+                                        <p>No se encontraron jornales registrados.</p>
+                                    </div>
+                                </div>
+                                
+                                <div class="modal-section" id="laboresSection" style="display: none;">
+                                    <h3 class="section-title">Actividades Críticas de Rendimiento</h3>
+                                    <div id="priorityActivitiesContainer" class="priority-activities-grid"></div>
+                                    
+                                    <h3 class="section-title" style="margin-top: 1.5rem; font-size: 0.9rem; opacity: 0.8;">Otras Labores Realizadas</h3>
+                                    <div id="laboresContainer" class="labores-list"></div>
+                                </div>
+                            </div>
+                            <div id="profileLoader" class="loader-container">
+                                <i class="ph ph-spinner ph-spin"></i>
+                                <p>Consultando historial completo...</p>
+                            </div>
+                        </div>
+
+                        <!-- Tab 2: Rendimientos -->
+                        <div id="tab-rendimientos" class="tab-content" style="display: none;">
+                            <div class="modal-section">
+                                <h3 class="section-title">Análisis de Rendimientos (Poda, Raleo, Cosecha)</h3>
+                                <div id="rendimientosContainer" style="display: none;"></div>
+                                <div id="noRendimientosMessage" class="empty-state" style="display: none;">
+                                    <i class="ph ph-trend-down"></i>
+                                    <p>No se encontraron registros de rendimiento calculados.</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tab 2: Asistencia -->
+                        <div id="tab-asistencia" class="tab-content" style="display: none;">
+                            <div class="empty-state">
+                                <i class="ph ph-calendar-check"></i>
+                                <p>El historial detallado de asistencia se visualizará aquí.</p>
+                            </div>
+                        </div>
+
+                        <!-- Tab 3: Labores -->
+                        <div id="tab-labores" class="tab-content" style="display: none;">
+                            <div class="empty-state">
+                                <i class="ph ph-plant"></i>
+                                <p>El historial de labores específicas se detallará en esta sección.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+
+    <!-- Modal de Gestión de Labores (CRUD) -->
+    <div id="laborModal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <div>
+                    <h2 id="laborModalTitle" class="modal-title">Gestión de Labor</h2>
+                    <p class="modal-subtitle">Complete los datos de la labor técnica</p>
+                </div>
+                <button onclick="closeLaborModal()" class="action-btn icon-btn">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            
+            <form id="laborForm" onsubmit="event.preventDefault(); saveLabor();">
+                <div class="modal-body">
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label for="laborCode" style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.4rem;">Código de Labor</label>
+                        <input type="text" id="laborCode" placeholder="Cargando..." style="width: 100%; padding: 0.6rem; border: 1px solid var(--border-color); border-radius: 8px;" required>
+                        <small style="color:var(--text-secondary); font-size: 0.7rem;">El código es automático y único.</small>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 1rem;">
+                        <label for="laborName" style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.4rem;">Nombre de la Labor</label>
+                        <input type="text" id="laborName" placeholder="Ej: Poda de Crecimiento" style="width: 100%; padding: 0.6rem; border: 1px solid var(--border-color); border-radius: 8px;" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="laborUnit" style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.4rem;">Unidad de Medida</label>
+                        <input type="text" id="laborUnit" placeholder="Ej: JABAS, PALLET, KG..." style="width: 100%; padding: 0.6rem; border: 1px solid var(--border-color); border-radius: 8px;" required>
+                    </div>
+                </div>
+                <div class="modal-footer" style="padding: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem; border-top: 1px solid var(--border-color);">
+                    <button type="button" onclick="closeLaborModal()" style="border: none; background: none; font-weight: 600; color: var(--text-secondary); cursor: pointer;">Cancelar</button>
+                    <button type="submit" class="action-btn primary-btn">
+                        <i class="ph ph-floppy-disk"></i> Guardar Cambios
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para Asignar Labor a Actividad -->
+    <div id="assignLaborModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <div>
+                    <h2 class="modal-title">Asignar Labor</h2>
+                    <p id="assignModalSubtitle" class="modal-subtitle">Seleccione una labor para esta actividad</p>
+                </div>
+                <button onclick="closeAssignModal()" class="action-btn icon-btn">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="search-box" style="margin-bottom: 1rem; width: 100%;">
+                    <i class="ph ph-magnifying-glass"></i>
+                    <input type="text" id="laborSearchInput" placeholder="Buscar labor por nombre..." oninput="searchLaborsForAssignment()">
+                </div>
+                <div id="laborSelectorContainer" class="table-wrapper" style="max-height: 400px; overflow-y: auto;">
+                    <table style="width: 100%; font-size: 0.85rem;">
+                        <thead style="position: sticky; top: 0; background: white; z-index: 10;">
+                            <tr>
+                                <th>Código</th>
+                                <th>Labor</th>
+                                <th>Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="laborSelectorBody">
+                            <!-- Labores se cargarán aquí -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Gestión de Precios (CRUD) -->
+    <div id="priceModal" class="modal">
+        <div class="modal-content" style="max-width: 650px;">
+            <div class="modal-header">
+                <div>
+                    <h2 id="priceModalTitle" class="modal-title">Gestión de Precio</h2>
+                    <p class="modal-subtitle">Configure el precio por actividad y labor</p>
+                </div>
+                <button onclick="closePriceModal()" class="action-btn icon-btn">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            
+            <form id="priceForm" onsubmit="event.preventDefault(); savePrice();">
+                <input type="hidden" id="priceId"> <!-- PK numérica bigserial -->
+                <div class="modal-body price-modal-grid">
+                    <!-- Fila 1: Campaña, Semana, Etapa -->
+                    <div class="price-row-3cols">
+                        <div class="form-group">
+                            <label for="priceCampana" class="form-label-premium">Campaña</label>
+                            <select id="priceCampana" class="form-select" style="width: 100%; padding: 0.6rem; border: 1px solid var(--border-color); border-radius: 8px;" required onchange="updatePriceGeneratedId()">
+                                <option value="2024">2024</option>
+                                <option value="2025">2025</option>
+                                <option value="2026">2026</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="priceSemana" class="form-label-premium">Semana</label>
+                            <select id="priceSemana" class="form-select" style="width: 100%; padding: 0.6rem; border: 1px solid var(--border-color); border-radius: 8px;" required onchange="updatePriceGeneratedId()">
+                                <!-- Llenado dinámico -->
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="priceEtapa" class="form-label-premium">ID Etapa</label>
+                            <input type="number" id="priceEtapa" value="1" style="width: 100%; padding: 0.6rem; border: 1px solid var(--border-color); border-radius: 8px;" required>
+                        </div>
+                    </div>
+
+                    <!-- Fila 2: Actividad Full-Width -->
+                    <div class="form-group">
+                        <label for="priceActivity" class="form-label-premium">Actividad (Agritracer)</label>
+                        <div class="search-select-container" id="priceActivityContainer">
+                            <i class="ph ph-magnifying-glass search-select-icon"></i>
+                            <input type="text" id="priceActivitySearch" class="form-select search-select-input" placeholder="Buscar Actividad o Labor..." autocomplete="off">
+                            <input type="hidden" id="priceActivity" required>
+                            <div class="search-select-dropdown" id="priceActivityDropdown" style="display: none;"></div>
+                        </div>
+                    </div>
+
+                    <!-- Fila 3: Lote y CECO Side-by-Side -->
+                    <div class="price-row-2cols-mixed">
+                        <div class="form-group">
+                            <label for="priceLote" class="form-label-premium">Lote</label>
+                            <select id="priceLote" class="form-select" style="width: 100%; padding: 0.6rem; border: 1px solid var(--border-color); border-radius: 8px;" required onchange="updatePriceGeneratedId()">
+                                <option value="">Lote...</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="priceCeco" class="form-label-premium">CECO / PEP / ORDEN / OBRA</label>
+                            <div class="search-select-container" id="priceCecoContainer">
+                                <i class="ph ph-hash search-select-icon"></i>
+                                <input type="text" id="priceCecoSearch" class="form-select search-select-input" placeholder="Buscar Proyecto (CPOO)..." autocomplete="off">
+                                <input type="hidden" id="priceCeco" required>
+                                <div class="search-select-dropdown" id="priceCecoDropdown" style="display: none;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Fila 4: Grupo Highlight (Tarea, Tarifa, Meta) -->
+                    <div class="price-row-3cols" style="padding: 1rem; background: #f8fafc; border-radius: 12px; border: 1px solid var(--border-color);">
+                        <div class="form-group">
+                            <label for="priceTarea" class="form-label-premium form-label-highlight">Tarea</label>
+                            <input type="number" id="priceTarea" step="0.01" placeholder="0.00" style="width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px;" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="priceValue" class="form-label-premium form-label-highlight">Tarifa</label>
+                            <input type="number" id="priceValue" step="0.0001" placeholder="0.0000" style="width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px;" required onchange="updatePriceGeneratedId()">
+                        </div>
+                        <div class="form-group">
+                            <label for="priceMeta" class="form-label-premium form-label-highlight">Meta</label>
+                            <input type="number" id="priceMeta" step="0.01" placeholder="0.00" style="width: 100%; padding: 0.6rem; border: 1px solid #cbd5e1; border-radius: 8px;" required>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px dashed #e2e8f0; padding-top: 0.75rem;">
+                        <span style="font-size: 0.65rem; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">Código Generado:</span>
+                        <input type="text" id="priceGeneratedId" readonly style="background: transparent; border: none; font-size: 0.75rem; font-weight: 700; color: var(--primary-color); text-align: right;" value="---">
+                    </div>
+                </div>
+                <div class="modal-footer" style="padding: 1rem 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem; border-top: 1px solid var(--border-color);">
+                    <button type="button" onclick="closePriceModal()" style="border: none; background: none; font-weight: 600; color: var(--text-secondary); cursor: pointer;">Cancelar</button>
+                    <button type="submit" class="action-btn primary-btn">
+                        <i class="ph ph-floppy-disk"></i> Guardar Precio
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Edición de Trabajador (Perfil) -->
+    <div id="workerEditModal" class="modal">
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <div>
+                    <h2 class="modal-title">Editar Trabajador</h2>
+                    <p class="modal-subtitle">Actualice los datos personales básicos</p>
+                </div>
+                <button onclick="closeWorkerEditModal()" class="action-btn icon-btn">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            
+            <form id="workerEditForm" onsubmit="event.preventDefault(); saveWorkerEdit();">
+                <div class="modal-body">
+                    <!-- Resumen del Trabajador en Modal -->
+                    <div style="background: #f8fafc; border-radius: 12px; padding: 1rem; margin-bottom: 1.5rem; border: 1px solid var(--border-color);">
+                        <div id="editWorkerInfoName" style="font-weight: 800; color: var(--primary-color); font-size: 1.05rem; margin-bottom: 0.5rem; text-transform: uppercase;">-</div>
+                        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                            <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem;">
+                                <i class="ph-duotone ph-identification-card" style="color:var(--primary-color)"></i> DNI: <span id="editWorkerInfoDni" style="color:var(--text-primary)">-</span>
+                            </span>
+                            <span style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); display: flex; align-items: center; gap: 0.25rem;">
+                                <i class="ph-duotone ph-hash" style="color:var(--primary-color)"></i> CÓDIGO: <span id="editWorkerInfoCode" style="color:var(--text-primary)">-</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                        <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.4rem;">Género</label>
+                        <select id="editWorkerGenero" class="form-select" style="width: 100%; padding: 0.6rem; border: 1px solid var(--border-color); border-radius: 8px;" required>
+                            <option value="MASCULINO">MASCULINO</option>
+                            <option value="FEMENINO">FEMENINO</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 1.25rem;">
+                        <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.4rem;">Teléfono Principal</label>
+                        <input type="text" id="editWorkerPhone" placeholder="Ej: 987654321" style="width: 100%; padding: 0.6rem; border: 1px solid var(--border-color); border-radius: 8px;">
+                    </div>
+                    <div class="form-group">
+                        <label style="display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 0.4rem;">Procedencia</label>
+                        <input type="text" id="editWorkerProcedencia" placeholder="Ej: CHULUCANAS, PIURA" style="width: 100%; padding: 0.6rem; border: 1px solid var(--border-color); border-radius: 8px;">
+                    </div>
+                </div>
+                <div class="modal-footer" style="padding: 1.5rem; display: flex; justify-content: flex-end; gap: 0.75rem; border-top: 1px solid var(--border-color);">
+                    <button type="button" onclick="closeWorkerEditModal()" style="border: none; background: none; font-weight: 600; color: var(--text-secondary); cursor: pointer;">Cancelar</button>
+                    <button type="submit" class="action-btn primary-btn" id="saveWorkerEditBtn">
+                        <i class="ph ph-floppy-disk"></i> Guardar Cambios
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <!-- Modal para Listado de Grupos Agritracer (Ausentes / Retornos) -->
+    <div id="agtGroupModal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <div>
+                    <h2 id="agtGroupModalTitle" class="modal-title">Listado de Trabajadores</h2>
+                    <p id="agtGroupModalSubtitle" class="modal-subtitle">Personal filtrado por estado Agritracer</p>
+                </div>
+                <button onclick="closeAgtGroupModal()" class="action-btn icon-btn">
+                    <i class="ph ph-x"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="padding: 0;">
+                <div class="search-box" style="margin: 1rem; width: calc(100% - 2rem);">
+                    <i class="ph ph-magnifying-glass"></i>
+                    <input type="text" id="agtGroupSearch" placeholder="Buscar trabajador en la lista..." oninput="filterAgtGroupList()">
+                </div>
+                <div id="agtGroupListContainer" class="table-wrapper" style="max-height: 400px; overflow-y: auto;">
+                    <table style="width: 100%; font-size: 0.85rem;" id="agtGroupTable">
+                        <thead style="position: sticky; top: 0; background: white; z-index: 10;">
+                            <tr>
+                                <th style="width: 40px; text-align: center;">#</th>
+                                <th style="width: 70px;">DNI</th>
+                                <th>Nombres Completos</th>
+                                <th style="width: 130px;">Procedencia</th>
+                            </tr>
+                        </thead>
+                        <tbody id="agtGroupListBody">
+                            <!-- Inyectado vía JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="agtGroupLoading" style="display: none; padding: 2rem; text-align: center; color: var(--text-secondary);">
+                    <i class="ph ph-spinner ph-spin" style="font-size: 2rem; color: var(--primary-color);"></i>
+                    <p style="margin-top: 0.5rem;">Cargando directorio de personal...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js?v=4"></script>
+
+</body>
+</html>
