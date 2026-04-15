@@ -3,16 +3,57 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Dashboard from './components/Dashboard';
 import ProgramaCaporalDashboard from './components/ProgramaCaporalDashboard';
 import ReporteHoras from './components/ReporteHoras';
+import Login from './components/Login';
 import { AppSidebar } from './components/AppSidebar';
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { supabase } from './lib/supabase';
+import { Button } from "@/components/ui/button";
+import { LogOut, User, Loader2 } from "lucide-react";
 
 export default function App() {
   const [currentView, setCurrentView] = useState('caporal');
+  const [session, setSession] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Check active sessions and subscribe to auth changes
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen w-full flex items-center justify-center bg-slate-950">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="w-10 h-10 text-primary animate-spin" />
+          <p className="text-slate-400 font-bold text-xs uppercase tracking-widest animate-pulse">Cargando Sistema...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <Login />;
+  }
 
   return (
     <TooltipProvider>
@@ -29,10 +70,24 @@ export default function App() {
                 <span className="font-bold text-lg tracking-tight">Agritracer <span className="text-primary">Analytics</span></span>
               </div>
               <div className="ml-auto flex items-center gap-4">
-                <div className="hidden md:flex items-center gap-1 text-xs text-muted-foreground">
-                  <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  Conectado a Supabase
+                <div className="hidden md:flex items-center gap-3 mr-2">
+                  <div className="flex flex-col items-end">
+                    <span className="text-[10px] font-black text-slate-900 uppercase leading-none">{session.user.email?.split('@')[0]}</span>
+                    <span className="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Administrador</span>
+                  </div>
+                  <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center">
+                    <User className="w-4 h-4 text-slate-600" />
+                  </div>
                 </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={handleLogout}
+                  className="text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-colors h-9 px-3 gap-2 font-bold text-xs uppercase tracking-tight"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span className="hidden sm:inline">Salir</span>
+                </Button>
               </div>
             </header>
             

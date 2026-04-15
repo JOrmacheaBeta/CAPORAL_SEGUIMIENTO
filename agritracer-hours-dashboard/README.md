@@ -1,20 +1,61 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# Agritracer Hours Dashboard
 
-# Run and deploy your AI Studio app
+A comprehensive dashboard to visualize and analyze metrics from the `rpt_horas_agritracer` table in Supabase, featuring real-time charts and detailed data views.
 
-This contains everything you need to run your app locally.
+## Features
 
-View your app in AI Studio: https://ai.studio/apps/e2399624-f2c0-4827-a343-2b8f0d3ecc6e
+- **Real-time Analytics**: Visualize worker attendance and hours.
+- **Worker Details**: Detailed history of the last 15 days for each worker.
+- **Authentication**: Secure login system using Supabase Auth.
+- **Responsive Design**: Built with React, Tailwind CSS, and shadcn/ui.
 
-## Run Locally
+## Getting Started
 
-**Prerequisites:**  Node.js
+### Prerequisites
 
+- Node.js (v18 or higher)
+- A Supabase project with the required tables/views.
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+### Installation
+
+1. Clone the repository:
+   ```bash
+   git clone <your-repo-url>
+   cd agritracer-dashboard
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Configure environment variables:
+   Create a `.env` file in the root directory and add your Supabase credentials:
+   ```env
+   VITE_SUPABASE_URL=https://your-project-id.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-anon-key-here
+   ```
+
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+## Deployment
+
+### Vercel
+
+1. Push your code to GitHub.
+2. Connect your GitHub repository to Vercel.
+3. Add the environment variables (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`) in the Vercel project settings.
+4. Vercel will automatically detect the Vite project and deploy it.
+
+## Built With
+
+- [React](https://reactjs.org/)
+- [Vite](https://vitejs.dev/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [shadcn/ui](https://ui.shadcn.com/)
+- [Supabase](https://supabase.com/)
+- [Lucide React](https://lucide.dev/)
+- [Recharts](https://recharts.org/)

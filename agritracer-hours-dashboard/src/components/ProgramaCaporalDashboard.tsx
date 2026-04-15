@@ -213,7 +213,7 @@ export default function ProgramaCaporalDashboard() {
 
               const { data: lastData } = await supabase
                 .from('rpt_horas_agritracer')
-                .select('fecha, fundo')
+                .select('fecha, fundo, lote, actividad')
                 .or(filters)
                 .order('fecha', { ascending: false })
                 .limit(1);
@@ -221,7 +221,9 @@ export default function ProgramaCaporalDashboard() {
               if (lastData && lastData.length > 0) {
                 lastDateMap.set(normalized, { 
                   fecha: lastData[0].fecha, 
-                  fundo: lastData[0].fundo || 'N/A' 
+                  fundo: lastData[0].fundo || 'N/A',
+                  lote: lastData[0].lote || 'N/A',
+                  actividad: lastData[0].actividad || 'N/A'
                 });
               }
             } catch (e) {
@@ -262,7 +264,9 @@ export default function ProgramaCaporalDashboard() {
           return {
             ...m,
             lastDate: lastInfo?.fecha || null,
-            lastFundo: lastInfo?.fundo || null
+            lastFundo: lastInfo?.fundo || null,
+            lastLote: lastInfo?.lote || null,
+            lastActividad: lastInfo?.actividad || null
           };
         }).sort((a: any, b: any) => {
           const nameA = a.t_trabajador?.trabajador || '';
@@ -550,6 +554,8 @@ export default function ProgramaCaporalDashboard() {
         date: day,
         attended: records.length > 0,
         fundo: records.length > 0 ? records[0].fundo : null,
+        lote: records.length > 0 ? records[0].lote : null,
+        actividad: records.length > 0 ? records[0].actividad : null,
         isHoliday: isPeruHoliday(day),
         isSunday: isSunday(day)
       };
@@ -928,7 +934,17 @@ export default function ProgramaCaporalDashboard() {
                                 <div className="p-1 rounded-full bg-primary/10">
                                   <MapPin className="w-3 h-3 text-primary" />
                                 </div>
-                                <span className="text-sm font-bold text-slate-700">{member.lastFundo}</span>
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-bold text-slate-700">{member.lastFundo}</span>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    {member.lastLote && (
+                                      <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tight bg-slate-100 px-1 rounded">L: {member.lastLote}</span>
+                                    )}
+                                    {member.lastActividad && (
+                                      <span className="text-[9px] text-primary font-black uppercase tracking-tighter truncate max-w-[120px]">{member.lastActividad}</span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             ) : (
                               <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest">—</span>
@@ -1046,47 +1062,88 @@ export default function ProgramaCaporalDashboard() {
             <div className="p-6 bg-white">
               {/* Resumen Gráfico */}
               {historySummary && (
-                <div className="mb-6 p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-6">
-                  <div className="w-24 h-24 relative flex-shrink-0">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={historySummary.chartData}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={30}
-                          outerRadius={45}
-                          paddingAngle={5}
-                          dataKey="value"
-                        >
-                          {historySummary.chartData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.color} />
-                          ))}
-                        </Pie>
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-xs font-black text-slate-900 leading-none">{historySummary.attendanceRate}%</span>
-                      <span className="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Asist.</span>
+                <div className="mb-6 space-y-4">
+                  <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex items-center gap-6">
+                    <div className="w-24 h-24 relative flex-shrink-0">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={historySummary.chartData}
+                            cx="50%"
+                            cy="50%"
+                            innerRadius={30}
+                            outerRadius={45}
+                            paddingAngle={5}
+                            dataKey="value"
+                          >
+                            {historySummary.chartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                        </PieChart>
+                      </ResponsiveContainer>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className="text-xs font-black text-slate-900 leading-none">{historySummary.attendanceRate}%</span>
+                        <span className="text-[8px] text-slate-500 font-bold uppercase tracking-tighter">Asist.</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex-1 grid grid-cols-2 gap-3">
+                      <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                        <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Asistencias</p>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+                          <span className="text-lg font-black text-slate-900">{historySummary.attended}</span>
+                          <span className="text-[10px] text-slate-400 font-bold">días</span>
+                        </div>
+                      </div>
+                      <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+                        <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Faltas</p>
+                        <div className="flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-rose-500"></div>
+                          <span className="text-lg font-black text-slate-900">{historySummary.missed}</span>
+                          <span className="text-[10px] text-slate-400 font-bold">días</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
-                  
-                  <div className="flex-1 grid grid-cols-2 gap-3">
-                    <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                      <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Asistencias</p>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                        <span className="text-lg font-black text-slate-900">{historySummary.attended}</span>
-                        <span className="text-[10px] text-slate-400 font-bold">días</span>
-                      </div>
-                    </div>
-                    <div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
-                      <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest mb-1">Faltas</p>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-rose-500"></div>
-                        <span className="text-lg font-black text-slate-900">{historySummary.missed}</span>
-                        <span className="text-[10px] text-slate-400 font-bold">días</span>
-                      </div>
+
+                  {/* Timeline Visual */}
+                  <div className="p-4 bg-slate-900 rounded-2xl shadow-inner border border-slate-800">
+                    <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest mb-4 flex items-center gap-2">
+                      <Clock className="w-3 h-3 text-primary" />
+                      Línea de Tiempo (Últimos 15 días)
+                    </p>
+                    <div className="flex justify-between items-end h-16 gap-1.5 px-1">
+                      {workerHistory.map((item, i) => (
+                        <div key={i} className="flex-1 flex flex-col items-center gap-2 group relative h-full">
+                          {/* Contenedor de la barra con altura fija */}
+                          <div className="w-full flex-1 relative flex items-end">
+                            <div 
+                              className={`w-full rounded-sm transition-all duration-500 ease-out ${
+                                item.attended 
+                                  ? 'bg-emerald-500 h-full shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
+                                  : item.isSunday || item.isHoliday
+                                    ? 'bg-slate-700 h-[20%]'
+                                    : 'bg-rose-500 h-full shadow-[0_0_15px_rgba(225,29,72,0.4)]'
+                              }`}
+                            />
+                          </div>
+                          <span className="text-[8px] font-black text-slate-500 group-hover:text-white transition-colors">
+                            {format(item.date, 'dd')}
+                          </span>
+                          
+                          {/* Tooltip mejorado */}
+                          <div className="absolute bottom-full mb-3 hidden group-hover:block z-50">
+                            <div className="bg-white text-slate-900 text-[9px] font-black px-3 py-1.5 rounded-lg shadow-2xl border border-slate-100 whitespace-nowrap uppercase flex flex-col items-center gap-0.5">
+                              <span className="text-slate-500 text-[7px]">{format(item.date, 'EEEE dd MMMM', { locale: es })}</span>
+                              <span className={item.attended ? 'text-emerald-600' : item.isSunday || item.isHoliday ? 'text-slate-400' : 'text-rose-600'}>
+                                {item.attended ? 'ASISTIÓ' : item.isSunday ? 'DOMINGO' : item.isHoliday ? 'FERIADO' : 'FALTA'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -1127,10 +1184,26 @@ export default function ProgramaCaporalDashboard() {
                             <Badge className="bg-emerald-600 text-white text-[9px] font-black px-2 py-0.5 rounded-full border-none uppercase">
                               ASISTIÓ
                             </Badge>
-                            {item.fundo && (
-                              <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-black uppercase">
-                                <MapPin className="w-3 h-3" />
-                                {item.fundo}
+                            {(item.fundo || item.lote || item.actividad) && (
+                              <div className="flex flex-col items-end gap-0.5 mt-1">
+                                {item.actividad && (
+                                  <div className="text-[9px] text-primary font-black uppercase tracking-tight mb-0.5">
+                                    {item.actividad}
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-2">
+                                  {item.lote && (
+                                    <div className="text-[9px] text-slate-500 font-bold uppercase tracking-tight bg-slate-100 px-1.5 py-0.5 rounded">
+                                      Lote: {item.lote}
+                                    </div>
+                                  )}
+                                  {item.fundo && (
+                                    <div className="flex items-center gap-1 text-[10px] text-emerald-700 font-black uppercase">
+                                      <MapPin className="w-3 h-3" />
+                                      {item.fundo}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </>
