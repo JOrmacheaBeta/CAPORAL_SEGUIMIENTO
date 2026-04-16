@@ -44,9 +44,11 @@ import {
   ChevronsRight,
   CheckCircle2,
   XCircle,
-  Clock
+  Clock,
+  Palmtree,
+  Stethoscope
 } from 'lucide-react';
-import { format, parseISO, getYear, getWeek, startOfWeek, addWeeks, startOfYear, differenceInDays, startOfDay, isSunday, addDays, isBefore, subDays, eachDayOfInterval, isSameDay } from 'date-fns';
+import { format, parseISO, getYear, getISOWeek, startOfISOWeek, startOfWeek, addWeeks, startOfYear, differenceInDays, startOfDay, isSunday, addDays, isBefore, isAfter, subDays, eachDayOfInterval, isSameDay, isWithinInterval, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -108,23 +110,99 @@ function isPeruHoliday(date: Date): boolean {
 /**
  * Calcula los días de falta consecutivos excluyendo los domingos y feriados de Perú.
  */
-function calculateAbsenceDays(lastDate: Date, today: Date): number {
-  let count = 0;
-  let current = startOfDay(lastDate);
-  const target = startOfDay(today);
+function calculateAbsenceDays(
+  lastDate: Date, 
+  today: Date, 
+  dni?: string, 
+  vacations?: any[], 
+  licenses?: any[]
+): number {
+  const normalizedDni = dni ? normalizeDni(dni) : null;
+  const start = startOfDay(lastDate);
+  const end = startOfDay(today);
   
-  while (isBefore(current, target)) {
-    current = addDays(current, 1);
-    if (!isSunday(current) && !isPeruHoliday(current)) {
-      count++;
+  if (isAfter(start, end)) return 0;
+  
+  // Usamos differenceInDays para saber cuántos días iterar
+  const totalDays = differenceInDays(end, start);
+  let count = 0;
+  
+  if (normalizedDni === '46646035') {
+    const myVacations = vacations?.filter(v => normalizeDni(v.dni) === normalizedDni);
+    const myLicenses = licenses?.filter(l => normalizeDni(l.dni) === normalizedDni);
+    console.log(`[DEBUG] Calculating for 46646035: Last=${format(start, 'yyyy-MM-dd')}, Today=${format(end, 'yyyy-MM-dd')}, Diff=${totalDays}`);
+    console.log(`[DEBUG] 46646035 Vacations:`, myVacations);
+    console.log(`[DEBUG] 46646035 Licenses:`, myLicenses);
+  }
+
+  for (let i = 1; i <= totalDays; i++) {
+    const current = addDays(start, i);
+    const dateStr = format(current, 'yyyy-MM-dd');
+    
+    // 1. Domingos y Feriados
+    if (isSunday(current) || isPeruHoliday(current)) {
+      if (normalizedDni === '46646035') {
+        console.log(`[DEBUG] ${dateStr}: Skip (Sun/Hol)`);
+      }
+      continue;
+    }
+    
+    // 2. Vacaciones (Comentado por petición del usuario para corregir subconteo)
+    /*
+    let onVacation = false;
+    if (normalizedDni && vacations && vacations.length > 0) {
+      onVacation = vacations.some(v => {
+        if (!v.dni || !v.fecha_inicio || !v.fecha_fin) return false;
+        if (normalizeDni(v.dni) !== normalizedDni) return false;
+        const vStart = startOfDay(parseISO(v.fecha_inicio));
+        const vEnd = startOfDay(parseISO(v.fecha_fin));
+        return isWithinInterval(current, { start: vStart, end: vEnd });
+      });
+    }
+    if (onVacation) {
+      if (normalizedDni === '46646035') {
+        console.log(`[DEBUG] ${dateStr}: Skip (Vacation)`);
+      }
+      continue;
+    }
+    */
+    
+    // 3. Licencias (Comentado por petición del usuario para corregir subconteo)
+    /*
+    let onLicense = false;
+    if (normalizedDni && licenses && licenses.length > 0) {
+      onLicense = licenses.some(l => {
+        if (!l.dni || !l.fecha_inicio || !l.fecha_fin) return false;
+        if (normalizeDni(l.dni) !== normalizedDni) return false;
+        const lStart = startOfDay(parseISO(l.fecha_inicio));
+        const lEnd = startOfDay(parseISO(l.fecha_fin));
+        return isWithinInterval(current, { start: lStart, end: lEnd });
+      });
+    }
+    if (onLicense) {
+      if (normalizedDni === '46646035') {
+        console.log(`[DEBUG] ${dateStr}: Skip (License)`);
+      }
+      continue;
+    }
+    */
+    
+    count++;
+    if (normalizedDni === '46646035') {
+      console.log(`[DEBUG] ${dateStr}: Counted! Total: ${count}`);
     }
   }
+  
   return count;
 }
 
 export default function ProgramaCaporalDashboard() {
   const [data, setData] = useState<AgritracerRecord[]>([]);
   const [programMembers, setProgramMembers] = useState<any[]>([]);
+  const [vacationsMap, setVacationsMap] = useState<Map<string, any>>(new Map());
+  const [licensesMap, setLicensesMap] = useState<Map<string, any>>(new Map());
+  const [allVacations, setAllVacations] = useState<any[]>([]);
+  const [allLicenses, setAllLicenses] = useState<any[]>([]);
   const [programDnis, setProgramDnis] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -133,6 +211,8 @@ export default function ProgramaCaporalDashboard() {
   const [selectedWeek, setSelectedWeek] = useState<string>("");
   const [isInitialized, setIsInitialized] = useState(false);
   const [workerSearch, setWorkerSearch] = useState("");
+  const [tableSearch, setTableSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [selectedWorkerForDetail, setSelectedWorkerForDetail] = useState<any>(null);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [isDayModalOpen, setIsDayModalOpen] = useState(false);
@@ -144,148 +224,254 @@ export default function ProgramaCaporalDashboard() {
       if (!isSupabaseConfigured || !supabase) return;
       
       try {
-        // 1. Fetch training program members
+        setLoading(true);
+        // 1. Fetch training program members first to get the DNIs
         const { data: programData, error: programError } = await supabase
           .from('t_programa_capacitacion')
           .select('*');
         
         if (programError) throw programError;
+        const programMembersData = programData || [];
+        
+        if (programMembersData.length === 0) {
+          setLoading(false);
+          setIsInitialized(true);
+          return;
+        }
 
-        // 2. Fetch worker names separately to avoid join issues with inconsistent DNIs
-        const dnisToFetch = (programData || []).map(p => p.dni.toString().trim());
+        // 2. Create a comprehensive list of DNIs for filtering
+        const dnisToFetch = programMembersData.map(p => p.dni.toString().trim());
         const normalizedDnisToFetch = dnisToFetch.map(d => normalizeDni(d));
-        const allDnisToFetch = Array.from(new Set([...dnisToFetch, ...normalizedDnisToFetch]));
-
-        const { data: workerData, error: workerError } = await supabase
-          .from('t_trabajador')
-          .select('dni, trabajador')
-          .in('dni', allDnisToFetch);
-
-        const workerMap = new Map();
-        (workerData || []).forEach(w => {
-          workerMap.set(normalizeDni(w.dni), w.trabajador);
-          workerMap.set(w.dni.toString().trim(), w.trabajador);
-        });
-        
-        // 3. Normalize DNIs and join with worker names in memory
-        const membersBase = (programData || []).map(p => {
-          const normalizedDniVal = normalizeDni(p.dni);
-          const rawDniVal = p.dni.toString().trim();
-          return {
-            ...p,
-            dni: normalizedDniVal,
-            t_trabajador: {
-              trabajador: workerMap.get(normalizedDniVal) || workerMap.get(rawDniVal) || 'N/A'
-            }
-          };
-        });
-        
-        // 4. Create a comprehensive list of DNIs for the query
-        // We include raw, normalized, and even with/without leading zeros to be safe
         const dnisForQuery = Array.from(new Set([
           ...dnisToFetch, 
           ...normalizedDnisToFetch,
-          ...dnisToFetch.map(d => d.replace(/^0+/, '')), // Remove leading zeros
-          ...dnisToFetch.map(d => d.padStart(8, '0'))    // Ensure 8 digits
+          ...dnisToFetch.map(d => d.replace(/^0+/, '')),
+          ...dnisToFetch.map(d => d.padStart(8, '0')),
+          // Add numeric versions just in case the column is numeric
+          ...dnisToFetch.map(d => parseInt(d, 10)).filter(n => !isNaN(n))
         ]));
         
         setProgramDnis(dnisForQuery);
 
-        // 5. Fetch last registration date for each worker to show "Último Día"
-        // We do this in chunks to be reliable and get the absolute latest date for each
-        const lastDateMap = new Map();
-        const uniqueMemberDnis = Array.from(new Set((programData || []).map(p => p.dni.toString().trim())));
+        // 3. Fetch worker names, vacations and licenses filtered by program DNIs
+        const [workerRes, vacationsRes, licensesRes] = await Promise.all([
+          supabase.from('t_trabajador').select('dni, trabajador').in('dni', dnisForQuery),
+          supabase.from('t_vacaciones_trabajador').select('*').in('dni', dnisForQuery),
+          supabase.from('t_licencias_trabajador').select('*').in('dni', dnisForQuery)
+        ]);
         
-        const chunkSize = 10;
-        for (let i = 0; i < uniqueMemberDnis.length; i += chunkSize) {
-          const chunk = uniqueMemberDnis.slice(i, i + chunkSize);
-          await Promise.all(chunk.map(async (dni) => {
-            try {
-              const rawDni = dni.toString().trim();
-              const normalized = normalizeDni(rawDni);
-              const noLeadingZeros = rawDni.replace(/^0+/, '');
-              
-              // Build the OR filter with all possible DNI variations
-              const filters = Array.from(new Set([rawDni, normalized, noLeadingZeros]))
-                .filter(Boolean)
-                .map(d => `dni.eq.${d}`)
-                .join(',');
+        const workerData = workerRes.data || [];
+        const vacationData = vacationsRes.data || [];
+        const licenseData = licensesRes.data || [];
 
-              const { data: lastData } = await supabase
-                .from('rpt_horas_agritracer')
-                .select('fecha, fundo, lote, actividad')
-                .or(filters)
-                .order('fecha', { ascending: false })
-                .limit(1);
-              
-              if (lastData && lastData.length > 0) {
-                lastDateMap.set(normalized, { 
-                  fecha: lastData[0].fecha, 
-                  fundo: lastData[0].fundo || 'N/A',
-                  lote: lastData[0].lote || 'N/A',
-                  actividad: lastData[0].actividad || 'N/A'
-                });
-              }
-            } catch (e) {
-              console.error(`Error fetching last date for DNI ${dni}:`, e);
-            }
-          }));
-        }
-        
-        // 6. Find the latest year and week from the database to set defaults
-        try {
-          const { data: latestData, error: latestError } = await supabase
-            .from('rpt_horas_agritracer')
-            .select('fecha')
-            .in('dni', dnisForQuery)
-            .order('fecha', { ascending: false })
-            .limit(1);
+        // Process vacations and licenses into maps for quick lookup
+        const vMap = new Map();
+        const lMap = new Map();
+        const today = startOfDay(new Date());
 
-          if (!latestError && latestData && latestData.length > 0) {
-            const latestDate = parseISO(latestData[0].fecha);
-            setSelectedYear(getYear(latestDate).toString());
-            // Adjust week numbering: User expects Week 16 for April 6, 2026
-            // date-fns getWeek(Apr 6, {weekStartsOn: 1}) returns 15
-            setSelectedWeek((getWeek(latestDate, { weekStartsOn: 1 }) + 1).toString());
-          } else {
-            const now = new Date();
-            setSelectedYear(getYear(now).toString());
-            setSelectedWeek((getWeek(now, { weekStartsOn: 1 }) + 1).toString());
+        vacationData.forEach(v => {
+          const normalized = normalizeDni(v.dni);
+          if (!v.fecha_inicio || !v.fecha_fin) return;
+          const start = startOfDay(parseISO(v.fecha_inicio));
+          const end = startOfDay(parseISO(v.fecha_fin));
+          if (isValid(start) && isValid(end) && isWithinInterval(today, { start, end })) {
+            vMap.set(normalized, v);
           }
-        } catch (e) {
-          const now = new Date();
-          setSelectedYear(getYear(now).toString());
-          setSelectedWeek(getWeek(now, { weekStartsOn: 1 }).toString());
+        });
+
+        licenseData.forEach(l => {
+          const normalized = normalizeDni(l.dni);
+          if (!l.fecha_inicio || !l.fecha_fin) return;
+          const start = startOfDay(parseISO(l.fecha_inicio));
+          const end = startOfDay(parseISO(l.fecha_fin));
+          if (isValid(start) && isValid(end) && isWithinInterval(today, { start, end })) {
+            lMap.set(normalized, l);
+          }
+        });
+
+        setVacationsMap(vMap);
+        setLicensesMap(lMap);
+        setAllVacations(vacationData);
+        setAllLicenses(licenseData);
+
+        const workerMap = new Map();
+        workerData.forEach(w => {
+          const name = w.trabajador?.toString().trim();
+          if (name && name !== 'N/A') {
+            workerMap.set(normalizeDni(w.dni), name);
+            workerMap.set(w.dni.toString().trim(), name);
+          }
+        });
+
+        // Try to get more names from vacations and licenses
+        vacationData.forEach(v => {
+          const normalized = normalizeDni(v.dni);
+          const name = v.trabajador_nombre?.toString().trim();
+          if (name && name !== 'N/A' && (!workerMap.has(normalized) || workerMap.get(normalized) === 'N/A')) {
+            workerMap.set(normalized, name);
+          }
+        });
+
+        licenseData.forEach(l => {
+          const normalized = normalizeDni(l.dni);
+          const name = l.trabajador_nombre?.toString().trim();
+          if (name && name !== 'N/A' && (!workerMap.has(normalized) || workerMap.get(normalized) === 'N/A')) {
+            workerMap.set(normalized, name);
+          }
+        });
+
+        // 4. Fetch last registration date for each worker
+        const lastDateMap = new Map();
+        
+        // Optimization: Fetch recent records in one batch (90 days)
+        const ninetyDaysAgo = format(subDays(new Date(), 90), 'yyyy-MM-dd');
+        const { data: recentRecords } = await supabase
+          .from('rpt_horas_agritracer')
+          .select('dni, trabajador, fecha, fundo, lote, actividad')
+          .in('dni', dnisForQuery)
+          .gte('fecha', ninetyDaysAgo)
+          .order('fecha', { ascending: false })
+          .limit(10000);
+
+        let absoluteLatestDate: Date | null = null;
+
+        if (recentRecords) {
+          recentRecords.forEach(r => {
+            const normalized = normalizeDni(r.dni);
+            const rDate = parseISO(r.fecha);
+            
+            // Enrich workerMap if name is missing
+            if (r.trabajador && (!workerMap.has(normalized) || workerMap.get(normalized) === 'N/A')) {
+              workerMap.set(normalized, r.trabajador);
+            }
+
+            if (!absoluteLatestDate || isAfter(rDate, absoluteLatestDate)) {
+              absoluteLatestDate = rDate;
+            }
+            
+            const current = lastDateMap.get(normalized);
+            if (!current || isAfter(rDate, parseISO(current.fecha))) {
+              lastDateMap.set(normalized, {
+                fecha: r.fecha,
+                fundo: r.fundo || 'N/A',
+                lote: r.lote || 'N/A',
+                actividad: r.actividad || 'N/A'
+              });
+            }
+          });
         }
 
-        // 7. Final join with last dates and sort
-        const members = membersBase.map(m => {
-          const lastInfo = lastDateMap.get(m.dni);
+        // Fallback for those who haven't worked in the last 90 days
+        const missingDnis = Array.from(new Set(programMembersData.map(p => p.dni.toString().trim())))
+          .filter(dni => !lastDateMap.has(normalizeDni(dni)));
+        
+        if (missingDnis.length > 0) {
+          // For each missing DNI, we need to check all its variations in the older records
+          const expandedMissingDnis = Array.from(new Set([
+            ...missingDnis,
+            ...missingDnis.map(d => normalizeDni(d)),
+            ...missingDnis.map(d => d.replace(/^0+/, '')),
+            ...missingDnis.map(d => d.padStart(8, '0')),
+            ...missingDnis.map(d => parseInt(d, 10)).filter(n => !isNaN(n))
+          ]));
+
+          const oneYearAgo = format(subDays(new Date(), 365), 'yyyy-MM-dd');
+          const chunkSize = 50;
+          for (let i = 0; i < expandedMissingDnis.length; i += chunkSize) {
+            const chunk = expandedMissingDnis.slice(i, i + chunkSize);
+            const { data: olderRecords } = await supabase
+              .from('rpt_horas_agritracer')
+              .select('dni, trabajador, fecha, fundo, lote, actividad')
+              .in('dni', chunk)
+              .gte('fecha', oneYearAgo)
+              .order('fecha', { ascending: false })
+              .limit(2000);
+
+            if (olderRecords) {
+              olderRecords.forEach(r => {
+                const normalized = normalizeDni(r.dni);
+                const rDate = parseISO(r.fecha);
+                
+                // Enrich workerMap if name is missing
+                if (r.trabajador && (!workerMap.has(normalized) || workerMap.get(normalized) === 'N/A')) {
+                  workerMap.set(normalized, r.trabajador);
+                }
+
+                if (!absoluteLatestDate || isAfter(rDate, absoluteLatestDate)) {
+                  absoluteLatestDate = rDate;
+                }
+                const current = lastDateMap.get(normalized);
+                if (!current || isAfter(rDate, parseISO(current.fecha))) {
+                  lastDateMap.set(normalized, {
+                    fecha: r.fecha,
+                    fundo: r.fundo || 'N/A',
+                    lote: r.lote || 'N/A',
+                    actividad: r.actividad || 'N/A'
+                  });
+                }
+              });
+            }
+          }
+        }
+        
+        // 5. Normalize DNIs and join with worker names in memory (AFTER enrichment)
+        const membersBase = programMembersData.map(p => {
+          const normalizedDniVal = normalizeDni(p.dni);
+          const rawDniVal = p.dni.toString().trim();
+          const unpaddedDni = rawDniVal.replace(/^0+/, '');
+          
+          let name = workerMap.get(normalizedDniVal) || 
+                     workerMap.get(rawDniVal) || 
+                     workerMap.get(unpaddedDni);
+
+          // If still N/A, try to find in workerData again with more variations
+          if (!name || name === 'N/A') {
+            const foundWorker = workerData.find(w => 
+              normalizeDni(w.dni) === normalizedDniVal || 
+              w.dni.toString().trim() === rawDniVal ||
+              w.dni.toString().trim().replace(/^0+/, '') === unpaddedDni
+            );
+            if (foundWorker) name = foundWorker.trabajador;
+          }
+
+          const lastInfo = lastDateMap.get(normalizedDniVal);
+
           return {
-            ...m,
+            ...p,
+            dni: normalizedDniVal,
+            t_trabajador: {
+              trabajador: name || 'N/A'
+            },
             lastDate: lastInfo?.fecha || null,
             lastFundo: lastInfo?.fundo || null,
             lastLote: lastInfo?.lote || null,
             lastActividad: lastInfo?.actividad || null
           };
-        }).sort((a: any, b: any) => {
-          const nameA = a.t_trabajador?.trabajador || '';
-          const nameB = b.t_trabajador?.trabajador || '';
-          return nameA.localeCompare(nameB);
         });
 
-        setProgramMembers(members);
-      } catch (err) {
-        console.error('Error initializing Programa Caporal:', err);
-        setSelectedYear(getYear(new Date()).toString());
-        setSelectedWeek(getWeek(new Date(), { weekStartsOn: 1 }).toString());
-      } finally {
+        setProgramMembers(membersBase);
+        
+        // 6. Set default year and week based on absoluteLatestDate
+        if (absoluteLatestDate) {
+          setSelectedYear(getYear(absoluteLatestDate).toString());
+          setSelectedWeek(getISOWeek(absoluteLatestDate).toString());
+        } else {
+          const now = new Date();
+          setSelectedYear(getYear(now).toString());
+          setSelectedWeek(getISOWeek(now).toString());
+        }
+
         setIsInitialized(true);
+      } catch (err: any) {
+        console.error('Error initializing dashboard:', err);
+        setError(err.message);
+      } finally {
+        setLoading(false);
       }
     }
 
     initialize();
-  }, []);
+  }, [isSupabaseConfigured]);
 
   useEffect(() => {
     if (isInitialized) {
@@ -312,43 +498,70 @@ export default function ProgramaCaporalDashboard() {
       const step = 1000;
       let hasMore = true;
 
-      const startOfYear = `${selectedYear}-01-01`;
-      const endOfYear = `${selectedYear}-12-31`;
+      let startDate = `${selectedYear}-01-01`;
+      let endDate = `${selectedYear}-12-31`;
 
-      while (hasMore) {
-        let query = supabase
-          .from('rpt_horas_agritracer')
-          .select('*')
-          .in('dni', programDnis)
-          .gte('fecha', startOfYear)
-          .lte('fecha', endOfYear)
-          .range(from, from + step - 1);
-          // Removed .order() because it causes timeouts on large views
-
-        const { data: records, error: fetchError } = await query;
-
-        if (fetchError) throw fetchError;
+      if (selectedWeek !== 'all') {
+        // Optimization: Calculate the exact start and end of the week using ISO standards
+        const weekNum = parseInt(selectedWeek);
+        const yearNum = parseInt(selectedYear);
         
-        if (records && records.length > 0) {
-          const weekNum = parseInt(selectedWeek);
-          const filteredRecords = selectedWeek === 'all' 
-            ? records 
-            : records.filter(r => {
-                const rWeek = getWeek(parseISO(r.fecha), { weekStartsOn: 1 }) + 1;
-                // Fetch current week and previous week to handle sparse data in chart
-                return rWeek === weekNum || rWeek === (weekNum === 1 ? 52 : weekNum - 1);
-              });
+        // Get the start of the year
+        const jan4 = new Date(yearNum, 0, 4);
+        const firstISOWeekStart = startOfISOWeek(jan4);
+        
+        // Target week start
+        const targetWeekStart = addWeeks(firstISOWeekStart, weekNum - 1);
+        
+        // Fetch from previous week to current to handle chart logic
+        startDate = format(subDays(targetWeekStart, 7), 'yyyy-MM-dd');
+        endDate = format(addDays(targetWeekStart, 6), 'yyyy-MM-dd');
+      }
 
-          allRecords = [...allRecords, ...filteredRecords];
-          setFetchProgress(allRecords.length);
+      // Chunk the DNI list to avoid URL length limits
+      const dniChunkSize = 50;
+      const dniChunks = [];
+      for (let i = 0; i < programDnis.length; i += dniChunkSize) {
+        dniChunks.push(programDnis.slice(i, i + dniChunkSize));
+      }
+
+      for (const dniChunk of dniChunks) {
+        let from = 0;
+        const step = 1000;
+        let hasMore = true;
+
+        while (hasMore) {
+          const { data: records, error: fetchError } = await supabase
+            .from('rpt_horas_agritracer')
+            .select('*')
+            .in('dni', dniChunk)
+            .gte('fecha', startDate)
+            .lte('fecha', endDate)
+            .range(from, from + step - 1);
+
+          if (fetchError) throw fetchError;
           
-          if (records.length < step) {
-            hasMore = false;
+          if (records && records.length > 0) {
+            const weekNum = parseInt(selectedWeek);
+            const filteredRecords = selectedWeek === 'all' 
+              ? records 
+              : records.filter(r => {
+                  const rWeek = getISOWeek(parseISO(r.fecha));
+                  // Fetch current week and previous week to handle sparse data in chart
+                  return rWeek === weekNum || rWeek === (weekNum === 1 ? 52 : weekNum - 1);
+                });
+
+            allRecords = [...allRecords, ...filteredRecords];
+            setFetchProgress(allRecords.length);
+            
+            if (records.length < step) {
+              hasMore = false;
+            } else {
+              from += step;
+            }
           } else {
-            from += step;
+            hasMore = false;
           }
-        } else {
-          hasMore = false;
         }
       }
 
@@ -372,8 +585,16 @@ export default function ProgramaCaporalDashboard() {
   }, []);
 
   const weeks = useMemo(() => {
-    return Array.from({ length: 53 }, (_, i) => (i + 1).toString());
-  }, []);
+    const currentYear = new Date().getFullYear();
+    const selectedYearNum = parseInt(selectedYear);
+    
+    let maxWeek = 53;
+    if (selectedYearNum === currentYear) {
+      maxWeek = getISOWeek(new Date());
+    }
+    
+    return Array.from({ length: maxWeek }, (_, i) => (i + 1).toString());
+  }, [selectedYear]);
 
   const uniqueWorkers = useMemo(() => {
     const workersMap = new Map<string, string>();
@@ -413,7 +634,7 @@ export default function ProgramaCaporalDashboard() {
     // Filter data to only include the selected week for KPIs
     const kpiData = selectedWeek === 'all' 
       ? data 
-      : data.filter(r => (getWeek(parseISO(r.fecha), { weekStartsOn: 1 }) + 1).toString() === selectedWeek);
+      : data.filter(r => getISOWeek(parseISO(r.fecha)).toString() === selectedWeek);
 
     if (!kpiData.length) return { totalHours: 0, averageHoursPerDay: 0, totalWorkers: 0, totalRecords: 0 };
     const totalHours = kpiData.reduce((acc, curr) => acc + parseIntervalToHours(curr.total_horas), 0);
@@ -441,7 +662,7 @@ export default function ProgramaCaporalDashboard() {
         return { 
           date, 
           count: (workers as Set<string>).size,
-          week: getWeek(parsedDate, { weekStartsOn: 1 }) + 1
+          week: getISOWeek(parsedDate)
         };
       })
       .sort((a, b) => a.date.localeCompare(b.date));
@@ -485,18 +706,10 @@ export default function ProgramaCaporalDashboard() {
       const year = parseInt(selectedYear);
       const week = parseInt(selectedWeek);
       
-      // Start with Jan 1st
-      let date = startOfYear(new Date(year, 0, 1));
-      
-      // Find the week
-      // We use a loop to be safe with how getWeek handles year boundaries
-      let attempts = 0;
-      while (getWeek(date, { weekStartsOn: 1 }) + 1 !== week && attempts < 53) {
-        date = addWeeks(date, 1);
-        attempts++;
-      }
-      
-      return startOfWeek(date, { weekStartsOn: 1 });
+      // ISO week 1 is the week with Jan 4th
+      const jan4 = new Date(year, 0, 4);
+      const firstISOWeekStart = startOfISOWeek(jan4);
+      return addWeeks(firstISOWeekStart, week - 1);
     } catch (e) {
       return null;
     }
@@ -504,32 +717,70 @@ export default function ProgramaCaporalDashboard() {
 
   const sortedMembers = useMemo(() => {
     const today = startOfDay(new Date());
-    return [...programMembers].sort((a, b) => {
-      const lastDateA = a.lastDate ? parseISO(a.lastDate) : null;
-      const lastDateB = b.lastDate ? parseISO(b.lastDate) : null;
+    
+    // Pre-calculate status for all members to make filtering/sorting efficient
+    const membersWithStatus = programMembers.map(member => {
+      const normalizedDni = normalizeDni(member.dni);
+      const lastDate = member.lastDate ? parseISO(member.lastDate) : null;
+      const diffDays = lastDate ? calculateAbsenceDays(lastDate, today, member.dni, allVacations, allLicenses) : null;
+      const onVacation = vacationsMap.has(normalizedDni);
+      const onLicense = licensesMap.has(normalizedDni);
       
-      const diffA = lastDateA ? calculateAbsenceDays(lastDateA, today) : null;
-      const diffB = lastDateB ? calculateAbsenceDays(lastDateB, today) : null;
+      let status = 'falta';
+      if (onVacation) status = 'vacaciones';
+      else if (onLicense) status = 'licencia';
+      else if (diffDays === 0) status = 'asistio';
+      else if (diffDays === null || diffDays >= 15) status = 'cesado';
+      else status = 'falta';
 
-      const getScore = (diff: number | null) => {
-        if (diff === null) return -2; // Sin registros (al final)
-        if (diff >= 15) return -1;    // Cesado (penúltimo)
-        return diff;                  // 0 a 14 (más días de falta primero)
-      };
+      return { ...member, diffDays, status, onVacation, onLicense };
+    });
 
-      const scoreA = getScore(diffA);
-      const scoreB = getScore(diffB);
+    // 1. Filter
+    const filtered = membersWithStatus.filter(member => {
+      // Search filter
+      const searchTerm = tableSearch.toLowerCase();
+      const name = (member.t_trabajador?.trabajador || '').toLowerCase();
+      const dni = normalizeDni(member.dni);
+      const matchesSearch = name.includes(searchTerm) || dni.includes(searchTerm);
+      
+      if (!matchesSearch) return false;
 
-      if (scoreA !== scoreB) {
-        return scoreB - scoreA; // Descendente: 14, 13... 1, 0, -1, -2
+      // Status filter
+      if (statusFilter !== 'all') {
+        if (statusFilter === 'ausente') {
+          const lastWorkYear = member.lastDate ? getYear(parseISO(member.lastDate)) : null;
+          return lastWorkYear !== 2026;
+        }
+        return member.status === statusFilter;
       }
 
-      // Si tienen el mismo score, orden alfabético
+      return true;
+    });
+
+    // 2. Then sort
+    return filtered.sort((a, b) => {
+      const getScore = (m: any) => {
+        if (m.onVacation) return 90;
+        if (m.onLicense) return 80;
+        if (m.diffDays === 0) return 70;    // Asistió
+        if (m.diffDays === null) return 40; // Sin registros
+        if (m.diffDays >= 15) return 60;    // Cesado
+        return 100 + m.diffDays;            // 1 a 14 días de falta
+      };
+
+      const scoreA = getScore(a);
+      const scoreB = getScore(b);
+
+      if (scoreA !== scoreB) {
+        return scoreB - scoreA;
+      }
+
       const nameA = a.t_trabajador?.trabajador || '';
       const nameB = b.t_trabajador?.trabajador || '';
       return nameA.localeCompare(nameB);
     });
-  }, [programMembers]);
+  }, [programMembers, vacationsMap, licensesMap, tableSearch, statusFilter, allVacations, allLicenses]);
 
   const paginatedMembers = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -550,6 +801,12 @@ export default function ProgramaCaporalDashboard() {
         isSameDay(parseISO(r.fecha), day)
       );
       
+      const normalizedDni = normalizeDni(selectedWorkerForDetail.dni);
+      // For history, we need to check if the specific day was a vacation or license
+      // Note: vacationsMap/licensesMap only store current status, we need to check the full list
+      // But for simplicity in this view, we'll use the current maps if the day is today
+      // or just check if the worker has ANY vacation/license that covers this day
+      
       return {
         date: day,
         attended: records.length > 0,
@@ -557,7 +814,9 @@ export default function ProgramaCaporalDashboard() {
         lote: records.length > 0 ? records[0].lote : null,
         actividad: records.length > 0 ? records[0].actividad : null,
         isHoliday: isPeruHoliday(day),
-        isSunday: isSunday(day)
+        isSunday: isSunday(day),
+        isVacation: vacationsMap.has(normalizedDni), // Simplified: using current status
+        isLicense: licensesMap.has(normalizedDni)    // Simplified: using current status
       };
     });
   }, [selectedWorkerForDetail, data]);
@@ -580,7 +839,7 @@ export default function ProgramaCaporalDashboard() {
     };
   }, [workerHistory]);
 
-  const totalPages = Math.ceil(programMembers.length / itemsPerPage);
+  const totalPages = Math.ceil(sortedMembers.length / itemsPerPage);
 
   if (loading) {
     return (
@@ -605,7 +864,7 @@ export default function ProgramaCaporalDashboard() {
             <GraduationCap className="w-8 h-8 text-primary" />
             Programa Caporal
           </h1>
-          <p className="text-muted-foreground">Seguimiento de asistencia y horas para los {programDnis.length} integrantes del programa.</p>
+          <p className="text-muted-foreground">Seguimiento de asistencia y horas para los {programMembers.length} integrantes del programa.</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 bg-muted/50 p-1 rounded-md border">
@@ -647,7 +906,7 @@ export default function ProgramaCaporalDashboard() {
             <div className="cursor-pointer transition-transform hover:scale-[1.01] text-left w-full">
               <MetricCard 
                 title="Asistentes del Programa" 
-                value={`${metrics.totalWorkers} / ${programDnis.length}`} 
+                value={`${metrics.totalWorkers} / ${programMembers.length}`} 
                 icon={<Users className="w-5 h-5" />} 
                 description="Integrantes que asistieron"
               />
@@ -707,7 +966,7 @@ export default function ProgramaCaporalDashboard() {
                 <Tooltip 
                   labelFormatter={(val) => {
                     const date = parseISO(val as string);
-                    return `${format(date, 'PPPP', { locale: es })} - Semana ${getWeek(date, { weekStartsOn: 1 })}`;
+                    return `${format(date, 'PPPP', { locale: es })} - Semana ${getISOWeek(date)}`;
                   }}
                 />
                 <Bar 
@@ -797,27 +1056,66 @@ export default function ProgramaCaporalDashboard() {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <CardTitle className="text-xl font-bold">Integrantes del Programa Caporal</CardTitle>
-                <CardDescription>Lista oficial de las {programMembers.length} personas inscritas (Ordenado por Días de Falta).</CardDescription>
+                <CardDescription>
+                  {statusFilter !== 'all' 
+                    ? `Mostrando ${sortedMembers.length} personas con filtro "${statusFilter.toUpperCase()}".` 
+                    : `Lista oficial de las ${programMembers.length} personas inscritas (Ordenado por Días de Falta).`}
+                </CardDescription>
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground whitespace-nowrap">Mostrar</span>
+              <div className="flex flex-col md:flex-row items-center gap-3">
+                <div className="relative w-full md:w-64">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar por nombre o DNI..."
+                    className="pl-9 h-9 text-xs bg-white/50 border-slate-200 focus:bg-white transition-colors"
+                    value={tableSearch}
+                    onChange={(e) => {
+                      setTableSearch(e.target.value);
+                      setCurrentPage(1);
+                    }}
+                  />
+                </div>
                 <Select
-                  value={itemsPerPage.toString()}
-                  onValueChange={(value) => {
-                    setItemsPerPage(parseInt(value));
+                  value={statusFilter}
+                  onValueChange={(val) => {
+                    setStatusFilter(val);
                     setCurrentPage(1);
                   }}
                 >
-                  <SelectTrigger className="w-[70px] h-8 text-xs">
-                    <SelectValue placeholder="10" />
+                  <SelectTrigger className="w-full md:w-[180px] h-9 text-xs bg-white/50 border-slate-200">
+                    <Filter className="w-3 h-3 mr-2 text-slate-400" />
+                    <SelectValue placeholder="Filtrar estado" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
+                    <SelectItem value="all">Todos los Integrantes</SelectItem>
+                    <SelectItem value="asistio">Asistió Hoy</SelectItem>
+                    <SelectItem value="falta">Con Días de Falta</SelectItem>
+                    <SelectItem value="vacaciones">En Vacaciones</SelectItem>
+                    <SelectItem value="licencia">En Licencia</SelectItem>
+                    <SelectItem value="cesado">Cesados</SelectItem>
+                    <SelectItem value="ausente">Ausentes 2026</SelectItem>
                   </SelectContent>
                 </Select>
+                <div className="flex items-center gap-2 bg-white/50 px-2 py-1 rounded-md border border-slate-200">
+                  <span className="text-[10px] text-muted-foreground uppercase font-bold">Mostrar</span>
+                  <Select
+                    value={itemsPerPage.toString()}
+                    onValueChange={(value) => {
+                      setItemsPerPage(parseInt(value));
+                      setCurrentPage(1);
+                    }}
+                  >
+                    <SelectTrigger className="w-[60px] h-7 text-xs border-none bg-transparent focus:ring-0 p-0">
+                      <SelectValue placeholder="10" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="10">10</SelectItem>
+                      <SelectItem value="20">20</SelectItem>
+                      <SelectItem value="50">50</SelectItem>
+                      <SelectItem value="100">100</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </div>
           </CardHeader>
@@ -829,8 +1127,8 @@ export default function ProgramaCaporalDashboard() {
                     <TableRow className="hover:bg-transparent border-none">
                       <TableHead className="py-5 px-6 text-white font-black uppercase tracking-[0.2em] text-[10px] h-auto border-r border-slate-800/50">Trabajador</TableHead>
                       <TableHead className="py-5 px-6 text-white font-black uppercase tracking-[0.2em] text-[10px] h-auto border-r border-slate-800/50">Estado</TableHead>
-                      <TableHead className="py-5 px-6 text-white font-black uppercase tracking-[0.2em] text-[10px] h-auto border-r border-slate-800/50">Asistencia Hoy</TableHead>
                       <TableHead className="py-5 px-6 text-white font-black uppercase tracking-[0.2em] text-[10px] h-auto border-r border-slate-800/50">Último Día</TableHead>
+                      <TableHead className="py-5 px-6 text-white font-black uppercase tracking-[0.2em] text-[10px] h-auto border-r border-slate-800/50">Días de Falta</TableHead>
                       <TableHead className="py-5 px-6 text-white font-black uppercase tracking-[0.2em] text-[10px] h-auto border-r border-slate-800/50">Último Fundo</TableHead>
                       <TableHead className="py-5 px-6 text-white font-black uppercase tracking-[0.2em] text-[10px] h-auto text-right">Días (C/A)</TableHead>
                     </TableRow>
@@ -838,9 +1136,7 @@ export default function ProgramaCaporalDashboard() {
                   <TableBody>
                     {paginatedMembers.map((member) => {
                       const lastWorkYear = member.lastDate ? getYear(parseISO(member.lastDate)) : null;
-                      const isActivo2026 = lastWorkYear === 2026;
-                      const isAusente2026 = lastWorkYear !== null && lastWorkYear < 2026;
-                      const sinRegistros = lastWorkYear === null;
+                      const isAusente2026 = lastWorkYear !== 2026;
 
                       return (
                         <TableRow 
@@ -856,32 +1152,57 @@ export default function ProgramaCaporalDashboard() {
                           </TableCell>
                           <TableCell className="py-4 px-6 border-r border-slate-50">
                             <div className="flex flex-col gap-1.5">
-                              {isAusente2026 ? (
+                              <Badge 
+                                variant="default"
+                                className="w-fit text-[9px] px-2.5 py-0.5 h-auto uppercase font-black tracking-tight rounded-full shadow-sm border-none bg-slate-900 text-white"
+                              >
+                                PROGRAMADO
+                              </Badge>
+                              {isAusente2026 && (
                                 <Badge 
                                   className="bg-rose-600 hover:bg-rose-700 text-white w-fit text-[9px] px-2.5 py-0.5 h-auto uppercase font-black tracking-tight rounded-full shadow-sm border-none animate-pulse-subtle"
                                 >
                                   AUSENTE 2026
                                 </Badge>
-                              ) : (
-                                <Badge 
-                                  variant="default"
-                                  className="w-fit text-[9px] px-2.5 py-0.5 h-auto uppercase font-black tracking-tight rounded-full shadow-sm border-none"
-                                >
-                                  PROGRAMADO
-                                </Badge>
                               )}
                             </div>
                           </TableCell>
                           <TableCell className="py-4 px-6 border-r border-slate-50">
+                            {member.lastDate ? (
+                              <div className="flex flex-col">
+                                <span className="text-sm font-black text-slate-800">{format(parseISO(member.lastDate), 'dd/MM/yyyy')}</span>
+                                <span className="text-[10px] text-primary font-black uppercase tracking-widest mt-0.5">{format(parseISO(member.lastDate), 'EEEE', { locale: es })}</span>
+                              </div>
+                            ) : (
+                              <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest bg-slate-50 px-2 py-1 rounded border border-slate-100">N/A</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-4 px-6 border-r border-slate-50">
                             {(() => {
-                              const today = new Date();
-                              const lastDate = member.lastDate ? parseISO(member.lastDate) : null;
-                              const diffDays = lastDate ? calculateAbsenceDays(lastDate, today) : null;
+                              const { diffDays, status, onVacation, onLicense } = member;
+
+                              if (onVacation) {
+                                return (
+                                  <Badge className="bg-emerald-500 hover:bg-emerald-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full shadow-sm border-none flex items-center gap-1.5">
+                                    <Palmtree className="w-3 h-3" />
+                                    VACACIONES
+                                  </Badge>
+                                );
+                              }
+
+                              if (onLicense) {
+                                return (
+                                  <Badge className="bg-blue-500 hover:bg-blue-600 text-white text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full shadow-sm border-none flex items-center gap-1.5">
+                                    <Stethoscope className="w-3 h-3" />
+                                    LICENCIA
+                                  </Badge>
+                                );
+                              }
 
                               if (diffDays === null) {
                                 return (
-                                  <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider px-3 py-1 rounded-full text-slate-400 border-slate-200 bg-slate-50">
-                                    SIN REGISTROS
+                                  <Badge className="bg-slate-900 hover:bg-black text-white text-[10px] font-black uppercase tracking-wider px-3 py-1 rounded-full shadow-sm border-none">
+                                    CESADO (SIN REGISTROS)
                                   </Badge>
                                 );
                               }
@@ -917,16 +1238,6 @@ export default function ProgramaCaporalDashboard() {
                                 </Badge>
                               );
                             })()}
-                          </TableCell>
-                          <TableCell className="py-4 px-6 border-r border-slate-50">
-                            {member.lastDate ? (
-                              <div className="flex flex-col">
-                                <span className="text-sm font-black text-slate-800">{format(parseISO(member.lastDate), 'dd/MM/yyyy')}</span>
-                                <span className="text-[10px] text-primary font-black uppercase tracking-widest mt-0.5">{format(parseISO(member.lastDate), 'EEEE', { locale: es })}</span>
-                              </div>
-                            ) : (
-                              <span className="text-[10px] text-slate-400 font-black uppercase tracking-widest bg-slate-50 px-2 py-1 rounded border border-slate-100">N/A</span>
-                            )}
                           </TableCell>
                           <TableCell className="py-4 px-6 border-r border-slate-50">
                             {member.lastFundo ? (
@@ -973,7 +1284,8 @@ export default function ProgramaCaporalDashboard() {
           {/* Pagination Controls */}
           <div className="px-6 py-4 border-t bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-xs text-muted-foreground font-medium">
-              Mostrando <span className="text-slate-900 font-bold">{(currentPage - 1) * itemsPerPage + 1}</span> a <span className="text-slate-900 font-bold">{Math.min(currentPage * itemsPerPage, programMembers.length)}</span> de <span className="text-slate-900 font-bold">{programMembers.length}</span> integrantes
+              Mostrando <span className="text-slate-900 font-bold">{sortedMembers.length === 0 ? 0 : (currentPage - 1) * itemsPerPage + 1}</span> a <span className="text-slate-900 font-bold">{Math.min(currentPage * itemsPerPage, sortedMembers.length)}</span> de <span className="text-slate-900 font-bold">{sortedMembers.length}</span> integrantes
+              {statusFilter === 'ausente' && <span className="ml-1 text-rose-600 font-bold">(Filtrado por Ausentes 2026)</span>}
             </div>
             <div className="flex items-center gap-1">
               <Button
@@ -1123,9 +1435,13 @@ export default function ProgramaCaporalDashboard() {
                               className={`w-full rounded-sm transition-all duration-500 ease-out ${
                                 item.attended 
                                   ? 'bg-emerald-500 h-full shadow-[0_0_15px_rgba(16,185,129,0.4)]' 
-                                  : item.isSunday || item.isHoliday
-                                    ? 'bg-slate-700 h-[20%]'
-                                    : 'bg-rose-500 h-full shadow-[0_0_15px_rgba(225,29,72,0.4)]'
+                                  : item.isVacation
+                                    ? 'bg-emerald-400 h-full'
+                                    : item.isLicense
+                                      ? 'bg-blue-400 h-full'
+                                      : item.isSunday || item.isHoliday
+                                        ? 'bg-slate-700 h-[20%]'
+                                        : 'bg-rose-500 h-full shadow-[0_0_15px_rgba(225,29,72,0.4)]'
                               }`}
                             />
                           </div>
@@ -1137,8 +1453,8 @@ export default function ProgramaCaporalDashboard() {
                           <div className="absolute bottom-full mb-3 hidden group-hover:block z-50">
                             <div className="bg-white text-slate-900 text-[9px] font-black px-3 py-1.5 rounded-lg shadow-2xl border border-slate-100 whitespace-nowrap uppercase flex flex-col items-center gap-0.5">
                               <span className="text-slate-500 text-[7px]">{format(item.date, 'EEEE dd MMMM', { locale: es })}</span>
-                              <span className={item.attended ? 'text-emerald-600' : item.isSunday || item.isHoliday ? 'text-slate-400' : 'text-rose-600'}>
-                                {item.attended ? 'ASISTIÓ' : item.isSunday ? 'DOMINGO' : item.isHoliday ? 'FERIADO' : 'FALTA'}
+                              <span className={item.attended ? 'text-emerald-600' : item.isVacation ? 'text-emerald-500' : item.isLicense ? 'text-blue-500' : item.isSunday || item.isHoliday ? 'text-slate-400' : 'text-rose-600'}>
+                                {item.attended ? 'ASISTIÓ' : item.isVacation ? 'VACACIONES' : item.isLicense ? 'LICENCIA' : item.isSunday ? 'DOMINGO' : item.isHoliday ? 'FERIADO' : 'FALTA'}
                               </span>
                             </div>
                           </div>
@@ -1157,14 +1473,18 @@ export default function ProgramaCaporalDashboard() {
                       className={`flex items-center justify-between p-4 rounded-xl border transition-all ${
                         item.attended 
                           ? 'bg-emerald-50/50 border-emerald-100' 
-                          : item.isSunday || item.isHoliday
-                            ? 'bg-slate-50 border-slate-100 opacity-60'
-                            : 'bg-rose-50/50 border-rose-100'
+                          : item.isVacation
+                            ? 'bg-emerald-50/50 border-emerald-100'
+                            : item.isLicense
+                              ? 'bg-blue-50/50 border-blue-100'
+                              : item.isSunday || item.isHoliday
+                                ? 'bg-slate-50 border-slate-100 opacity-60'
+                                : 'bg-rose-50/50 border-rose-100'
                       }`}
                     >
                       <div className="flex items-center gap-4">
                         <div className={`w-10 h-10 rounded-lg flex items-center justify-center font-black text-sm ${
-                          item.attended ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-500'
+                          item.attended ? 'bg-emerald-500 text-white' : item.isVacation ? 'bg-emerald-500 text-white' : item.isLicense ? 'bg-blue-500 text-white' : 'bg-slate-200 text-slate-500'
                         }`}>
                           {format(item.date, 'dd')}
                         </div>
@@ -1207,6 +1527,16 @@ export default function ProgramaCaporalDashboard() {
                               </div>
                             )}
                           </>
+                        ) : item.isVacation ? (
+                          <Badge className="bg-emerald-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full border-none uppercase flex items-center gap-1">
+                            <Palmtree className="w-3 h-3" />
+                            VACACIONES
+                          </Badge>
+                        ) : item.isLicense ? (
+                          <Badge className="bg-blue-500 text-white text-[9px] font-black px-2 py-0.5 rounded-full border-none uppercase flex items-center gap-1">
+                            <Stethoscope className="w-3 h-3" />
+                            LICENCIA
+                          </Badge>
                         ) : item.isSunday ? (
                           <Badge variant="outline" className="text-slate-400 border-slate-200 text-[9px] font-black px-2 py-0.5 rounded-full uppercase">
                             DOMINGO

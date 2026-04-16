@@ -12,7 +12,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
-import { Users, GraduationCap, LayoutDashboard, Clock } from "lucide-react";
+import { Users, GraduationCap, LayoutDashboard, Clock, Palmtree, Stethoscope } from "lucide-react";
 
 interface AppSidebarProps {
   currentView: string;
@@ -67,6 +67,28 @@ export function AppSidebar({ currentView, onViewChange }: AppSidebarProps) {
                 >
                   <Clock className={currentView === 'reporte_horas' ? "text-primary" : "h-4 w-4"} />
                   <span>Reporte de Horas</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton 
+                  isActive={currentView === 'vacaciones'} 
+                  onClick={() => onViewChange('vacaciones')}
+                  tooltip="Gestión de Vacaciones"
+                  className={currentView === 'vacaciones' ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100 hover:text-emerald-700 font-bold border-l-2 border-emerald-600 rounded-l-none" : ""}
+                >
+                  <Palmtree className={currentView === 'vacaciones' ? "text-emerald-600" : "h-4 w-4"} />
+                  <span>Vacaciones</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+              <SidebarMenuItem>
+                <SidebarMenuButton 
+                  isActive={currentView === 'licencias'} 
+                  onClick={() => onViewChange('licencias')}
+                  tooltip="Gestión de Licencias"
+                  className={currentView === 'licencias' ? "bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700 font-bold border-l-2 border-blue-600 rounded-l-none" : ""}
+                >
+                  <Stethoscope className={currentView === 'licencias' ? "text-blue-600" : "h-4 w-4"} />
+                  <span>Licencias</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

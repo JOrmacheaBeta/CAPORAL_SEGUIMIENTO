@@ -34,11 +34,11 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen w-full flex items-center justify-center bg-slate-950 p-4 relative overflow-hidden">
+    <div className="min-h-screen w-full flex items-center justify-center bg-white p-4 relative overflow-hidden">
       {/* Background Decor */}
-      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-20">
-        <div className="absolute -top-24 -left-24 w-96 h-96 bg-primary/30 rounded-full blur-[120px]" />
-        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-emerald-500/20 rounded-full blur-[120px]" />
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none opacity-10">
+        <div className="absolute -top-24 -left-24 w-96 h-96 bg-sky-400/30 rounded-full blur-[120px]" />
+        <div className="absolute -bottom-24 -right-24 w-96 h-96 bg-emerald-400/20 rounded-full blur-[120px]" />
       </div>
 
       <motion.div
@@ -48,20 +48,20 @@ export default function Login() {
         className="w-full max-w-md z-10"
       >
         <div className="flex flex-col items-center mb-8">
-          <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center shadow-lg shadow-primary/20 mb-4 rotate-3">
-            <ShieldCheck className="w-10 h-10 text-primary-foreground" />
+          <div className="w-16 h-16 bg-sky-500 rounded-2xl flex items-center justify-center shadow-lg shadow-sky-200 mb-4 rotate-3">
+            <ShieldCheck className="w-10 h-10 text-white" />
           </div>
-          <h1 className="text-3xl font-black text-white tracking-tighter uppercase">
-            Agritracer <span className="text-primary">Analytics</span>
+          <h1 className="text-3xl font-black text-slate-800 tracking-tighter uppercase">
+            Agritracer <span className="text-sky-600">Analytics</span>
           </h1>
           <p className="text-slate-400 font-bold text-xs uppercase tracking-widest mt-2">
             Sistema de Reporte de Horas
           </p>
         </div>
 
-        <Card className="border-slate-800 bg-slate-900/50 backdrop-blur-xl shadow-2xl overflow-hidden">
-          <CardHeader className="space-y-1 pb-6 border-b border-slate-800/50">
-            <CardTitle className="text-xl font-black text-white uppercase tracking-tight">Iniciar Sesión</CardTitle>
+        <Card className="border-slate-100 bg-white shadow-xl overflow-hidden">
+          <CardHeader className="space-y-1 pb-6 border-b border-slate-50">
+            <CardTitle className="text-xl font-black text-slate-800 uppercase tracking-tight">Iniciar Sesión</CardTitle>
             <CardDescription className="text-slate-400 font-medium">
               Ingresa tus credenciales para acceder al dashboard
             </CardDescription>
@@ -69,14 +69,14 @@ export default function Login() {
           <form onSubmit={handleLogin}>
             <CardContent className="space-y-4 pt-6">
               {error && (
-                <Alert variant="destructive" className="bg-rose-500/10 border-rose-500/20 text-rose-500">
+                <Alert variant="destructive" className="bg-rose-50 border-rose-100 text-rose-500">
                   <AlertDescription className="font-bold text-xs uppercase tracking-tight">
                     {error}
                   </AlertDescription>
                 </Alert>
               )}
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-slate-300 font-bold text-[10px] uppercase tracking-widest">Correo Electrónico</Label>
+                <Label htmlFor="email" className="text-slate-500 font-bold text-[10px] uppercase tracking-widest">Correo Electrónico</Label>
                 <Input
                   id="email"
                   type="email"
@@ -84,12 +84,12 @@ export default function Login() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="bg-slate-950/50 border-slate-800 text-white placeholder:text-slate-600 focus:border-primary/50 transition-all h-11"
+                  className="bg-slate-50 border-slate-100 text-slate-700 placeholder:text-slate-300 focus:border-sky-200 transition-all h-11"
                 />
               </div>
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password" className="text-slate-300 font-bold text-[10px] uppercase tracking-widest">Contraseña</Label>
+                  <Label htmlFor="password" className="text-slate-500 font-bold text-[10px] uppercase tracking-widest">Contraseña</Label>
                 </div>
                 <Input
                   id="password"
@@ -97,14 +97,14 @@ export default function Login() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
-                  className="bg-slate-950/50 border-slate-800 text-white focus:border-primary/50 transition-all h-11"
+                  className="bg-slate-50 border-slate-100 text-slate-700 focus:border-sky-200 transition-all h-11"
                 />
               </div>
             </CardContent>
             <CardFooter className="pb-8">
               <Button 
                 type="submit" 
-                className="w-full h-12 font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20" 
+                className="w-full h-12 font-black uppercase tracking-widest text-xs shadow-lg shadow-sky-100 bg-sky-600 hover:bg-sky-700 text-white" 
                 disabled={loading}
               >
                 {loading ? (

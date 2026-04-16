@@ -7,6 +7,8 @@ import React, { useState, useEffect } from 'react';
 import Dashboard from './components/Dashboard';
 import ProgramaCaporalDashboard from './components/ProgramaCaporalDashboard';
 import ReporteHoras from './components/ReporteHoras';
+import GestionVacaciones from './components/GestionVacaciones';
+import GestionLicencias from './components/GestionLicencias';
 import Login from './components/Login';
 import { AppSidebar } from './components/AppSidebar';
 import { SidebarProvider, SidebarTrigger, SidebarInset } from "@/components/ui/sidebar";
@@ -42,10 +44,10 @@ export default function App() {
 
   if (loading) {
     return (
-      <div className="min-h-screen w-full flex items-center justify-center bg-slate-950">
+      <div className="min-h-screen w-full flex items-center justify-center bg-slate-50">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-10 h-10 text-primary animate-spin" />
-          <p className="text-slate-400 font-bold text-xs uppercase tracking-widest animate-pulse">Cargando Sistema...</p>
+          <p className="text-slate-500 font-bold text-xs uppercase tracking-widest animate-pulse">Cargando Sistema...</p>
         </div>
       </div>
     );
@@ -96,6 +98,10 @@ export default function App() {
                 <Dashboard />
               ) : currentView === 'programa_caporal' ? (
                 <ProgramaCaporalDashboard />
+              ) : currentView === 'vacaciones' ? (
+                <GestionVacaciones />
+              ) : currentView === 'licencias' ? (
+                <GestionLicencias />
               ) : (
                 <ReporteHoras />
               )}
