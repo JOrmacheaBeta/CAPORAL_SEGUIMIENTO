@@ -261,7 +261,7 @@ export default function ProgramaCaporalDashboard() {
 
         // 3. Fetch worker names, phone numbers, vacations and licenses filtered by program DNIs
         const [workerRes, vacationsRes, licensesRes] = await Promise.all([
-          supabase.from('t_trabajador').select('dni, trabajador, telefono_principal').in('dni', dnisForQuery),
+          supabase.from('t_trabajador').select('dni, trabajador, telefono_principal, codigo_trabajador').in('dni', dnisForQuery),
           supabase.from('t_vacaciones_trabajador').select('*').in('dni', dnisForQuery),
           supabase.from('t_licencias_trabajador').select('*').in('dni', dnisForQuery)
         ]);
@@ -295,7 +295,7 @@ export default function ProgramaCaporalDashboard() {
             const chunk = uniqueNames.slice(i, i + 50);
             const { data: fallbackWorkers } = await supabase
               .from('t_trabajador')
-              .select('dni, trabajador, telefono_principal')
+              .select('dni, trabajador, telefono_principal, codigo_trabajador')
               .in('trabajador', chunk);
             if (fallbackWorkers) {
               workerData = [...workerData, ...fallbackWorkers];
@@ -336,7 +336,9 @@ export default function ProgramaCaporalDashboard() {
 
         const workerMap = new Map();
         const phoneMap = new Map();
+        const codeMap = new Map();
         const namePhoneMap = new Map(); // Name-based fallback map
+        const nameCodeMap = new Map(); // Name-based fallback map
         
         workerData.forEach(w => {
           const rawValue = w.dni?.toString().trim();
@@ -344,6 +346,7 @@ export default function ProgramaCaporalDashboard() {
           
           const name = w.trabajador?.toString().trim();
           const phone = w.telefono_principal?.toString().trim();
+          const code = w.codigo_trabajador?.toString().trim();
           const normalized = normalizeDni(rawValue);
           const raw = rawValue;
           const unpadded = raw.replace(/^0+/, '');
@@ -361,6 +364,9 @@ export default function ProgramaCaporalDashboard() {
             if (phone && phone !== 'N/A' && phone !== '') {
               namePhoneMap.set(upperName, phone);
             }
+            if (code && code !== 'N/A' && code !== '') {
+              nameCodeMap.set(upperName, code);
+            }
           }
           if (phone && phone !== 'N/A' && phone !== '') {
             phoneMap.set(normalized, phone);
@@ -368,6 +374,13 @@ export default function ProgramaCaporalDashboard() {
             phoneMap.set(unpadded, phone);
             phoneMap.set(padded, phone);
             if (numericStr) phoneMap.set(numericStr, phone);
+          }
+          if (code && code !== 'N/A' && code !== '') {
+            codeMap.set(normalized, code);
+            codeMap.set(raw, code);
+            codeMap.set(unpadded, code);
+            codeMap.set(padded, code);
+            if (numericStr) codeMap.set(numericStr, code);
           }
         });
 
@@ -511,14 +524,21 @@ export default function ProgramaCaporalDashboard() {
                         phoneMap.get(rawDniVal) || 
                         phoneMap.get(unpaddedDni) ||
                         (numericDni ? phoneMap.get(numericDni) : null);
+          
+          let code = codeMap.get(normalizedDniVal) || 
+                       codeMap.get(rawDniVal) || 
+                       codeMap.get(unpaddedDni) ||
+                       (numericDni ? codeMap.get(numericDni) : null);
 
-          // Second pass: by name fallback (if we found a name but no phone by DNI)
-          if ((!phone || phone === 'N/A') && name && name !== 'N/A') {
-            phone = namePhoneMap.get(name.toUpperCase());
+          // Second pass: by name fallback (if we found a name but no phone/code by DNI)
+          if (name && name !== 'N/A') {
+            const upperName = name.toUpperCase();
+            if (!phone || phone === 'N/A') phone = namePhoneMap.get(upperName);
+            if (!code || code === 'N/A') code = nameCodeMap.get(upperName);
           }
 
-          // Third pass: if phone not found, check workerData array directly (defensive)
-          if (!phone || phone === 'N/A') {
+          // Third pass: if phone or code not found, check workerData array directly (defensive)
+          if (!phone || phone === 'N/A' || !code || code === 'N/A') {
             const fw = workerData.find(w => {
               const wd = w.dni?.toString().trim();
               const wn = w.trabajador?.toString().trim().toUpperCase();
@@ -528,8 +548,13 @@ export default function ProgramaCaporalDashboard() {
                      (!isNaN(parseInt(wd || '', 10)) && parseInt(wd || '', 10).toString() === numericDni) ||
                      (name && wn === name.toUpperCase());
             });
-            if (fw && fw.telefono_principal && fw.telefono_principal !== 'N/A' && fw.telefono_principal !== '') {
-              phone = fw.telefono_principal.toString().trim();
+            if (fw) {
+              if ((!phone || phone === 'N/A') && fw.telefono_principal && fw.telefono_principal !== 'N/A' && fw.telefono_principal !== '') {
+                phone = fw.telefono_principal.toString().trim();
+              }
+              if ((!code || code === 'N/A') && fw.codigo_trabajador && fw.codigo_trabajador !== 'N/A' && fw.codigo_trabajador !== '') {
+                code = fw.codigo_trabajador.toString().trim();
+              }
             }
           }
 
@@ -538,7 +563,8 @@ export default function ProgramaCaporalDashboard() {
             dni: normalizedDniVal,
             t_trabajador: {
               trabajador: name || 'N/A',
-              telefono_principal: phone || null
+              telefono_principal: phone || null,
+              codigo_trabajador: code || null
             },
             lastDate: lastInfo?.fecha || null,
             lastFundo: lastInfo?.fundo || null,
@@ -939,6 +965,7 @@ export default function ProgramaCaporalDashboard() {
 
   const handleExportExcel = () => {
     const exportData = sortedMembers.map(member => ({
+      'CÓDIGO': member.t_trabajador?.codigo_trabajador || '',
       'TRABAJADOR': member.t_trabajador?.trabajador || 'N/A',
       'DNI': normalizeDni(member.dni),
       'TELÉFONO': member.t_trabajador?.telefono_principal || '',
@@ -956,6 +983,7 @@ export default function ProgramaCaporalDashboard() {
     
     // Auto-size columns
     const colWidths = [
+      { wch: 12 }, // Código
       { wch: 40 }, // Trabajador
       { wch: 12 }, // DNI
       { wch: 15 }, // Teléfono
@@ -1298,6 +1326,11 @@ export default function ProgramaCaporalDashboard() {
                                 <span className="text-[10px] text-slate-500 font-mono bg-slate-100 group-hover:bg-white w-fit px-2 py-0.5 rounded-full border border-slate-200 transition-colors uppercase tracking-tight">
                                   {normalizeDni(member.dni)}
                                 </span>
+                                {member.t_trabajador?.codigo_trabajador && (
+                                  <span className="text-[10px] text-primary font-mono bg-primary/5 group-hover:bg-white w-fit px-2 py-0.5 rounded-full border border-primary/20 transition-colors uppercase tracking-tight font-bold">
+                                    {member.t_trabajador.codigo_trabajador}
+                                  </span>
+                                )}
                                 {member.t_trabajador?.telefono_principal && (
                                   <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 group-hover:bg-white w-fit px-2 py-0.5 rounded-full border border-emerald-100 transition-colors flex items-center gap-1 shadow-sm">
                                     <Phone className="w-2.5 h-2.5" />
@@ -1521,6 +1554,9 @@ export default function ProgramaCaporalDashboard() {
                   </DialogTitle>
                   <DialogDescription className="text-slate-400 font-bold text-xs mt-1 flex items-center gap-2 flex-wrap">
                     <span className="bg-slate-800 px-2 py-0.5 rounded border border-slate-700 whitespace-nowrap">DNI: {normalizeDni(selectedWorkerForDetail?.dni || '')}</span>
+                    {selectedWorkerForDetail?.t_trabajador?.codigo_trabajador && (
+                      <span className="bg-slate-800 px-2 py-0.5 rounded border border-slate-700 whitespace-nowrap">CÓDIGO: {selectedWorkerForDetail.t_trabajador.codigo_trabajador}</span>
+                    )}
                     {selectedWorkerForDetail?.t_trabajador?.telefono_principal && (
                       <span className="bg-emerald-950/50 text-emerald-400 px-2 py-0.5 rounded border border-emerald-800/50 flex items-center gap-1.5 whitespace-nowrap">
                         <Phone className="w-3 h-3" />
