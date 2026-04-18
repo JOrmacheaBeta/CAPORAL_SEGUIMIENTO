@@ -46,8 +46,11 @@ import {
   XCircle,
   Clock,
   Palmtree,
-  Stethoscope
+  Stethoscope,
+  Phone,
+  Download
 } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { format, parseISO, getYear, getISOWeek, startOfISOWeek, startOfWeek, addWeeks, startOfYear, differenceInDays, startOfDay, isSunday, addDays, isBefore, isAfter, subDays, eachDayOfInterval, isSameDay, isWithinInterval, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -247,22 +250,59 @@ export default function ProgramaCaporalDashboard() {
           ...normalizedDnisToFetch,
           ...dnisToFetch.map(d => d.replace(/^0+/, '')),
           ...dnisToFetch.map(d => d.padStart(8, '0')),
-          // Add numeric versions just in case the column is numeric
-          ...dnisToFetch.map(d => parseInt(d, 10)).filter(n => !isNaN(n))
+          // Add numeric versions as strings just in case original was numeric
+          ...dnisToFetch.map(d => {
+            const parsed = parseInt(d, 10);
+            return isNaN(parsed) ? null : parsed.toString();
+          }).filter(Boolean) as string[]
         ]));
         
         setProgramDnis(dnisForQuery);
 
-        // 3. Fetch worker names, vacations and licenses filtered by program DNIs
+        // 3. Fetch worker names, phone numbers, vacations and licenses filtered by program DNIs
         const [workerRes, vacationsRes, licensesRes] = await Promise.all([
-          supabase.from('t_trabajador').select('dni, trabajador').in('dni', dnisForQuery),
+          supabase.from('t_trabajador').select('dni, trabajador, telefono_principal').in('dni', dnisForQuery),
           supabase.from('t_vacaciones_trabajador').select('*').in('dni', dnisForQuery),
           supabase.from('t_licencias_trabajador').select('*').in('dni', dnisForQuery)
         ]);
         
-        const workerData = workerRes.data || [];
+        // --- Name-based fallback logic start ---
+        let workerData = workerRes.data || [];
         const vacationData = vacationsRes.data || [];
         const licenseData = licensesRes.data || [];
+
+        // Identify names for workers whose DNI didn't match in t_trabajador
+        const foundDnisSet = new Set(workerData.map(w => normalizeDni(w.dni)));
+        const namesToSearchSet = new Set<string>();
+
+        const collectTargetNames = (dataArr: any[]) => {
+          dataArr.forEach(item => {
+            const normDni = normalizeDni(item.dni);
+            if (!foundDnisSet.has(normDni)) {
+              const name = item.trabajador_nombre || item.trabajador;
+              if (name && name !== 'N/A') namesToSearchSet.add(name.toString().trim().toUpperCase());
+            }
+          });
+        };
+
+        collectTargetNames(vacationData);
+        collectTargetNames(licenseData);
+
+        if (namesToSearchSet.size > 0) {
+          const uniqueNames = Array.from(namesToSearchSet);
+          // Query in chunks of 50 to avoid URL length issues
+          for (let i = 0; i < uniqueNames.length; i += 50) {
+            const chunk = uniqueNames.slice(i, i + 50);
+            const { data: fallbackWorkers } = await supabase
+              .from('t_trabajador')
+              .select('dni, trabajador, telefono_principal')
+              .in('trabajador', chunk);
+            if (fallbackWorkers) {
+              workerData = [...workerData, ...fallbackWorkers];
+            }
+          }
+        }
+        // --- Name-based fallback logic end ---
 
         // Process vacations and licenses into maps for quick lookup
         const vMap = new Map();
@@ -295,11 +335,39 @@ export default function ProgramaCaporalDashboard() {
         setAllLicenses(licenseData);
 
         const workerMap = new Map();
+        const phoneMap = new Map();
+        const namePhoneMap = new Map(); // Name-based fallback map
+        
         workerData.forEach(w => {
+          const rawValue = w.dni?.toString().trim();
+          if (!rawValue) return;
+          
           const name = w.trabajador?.toString().trim();
+          const phone = w.telefono_principal?.toString().trim();
+          const normalized = normalizeDni(rawValue);
+          const raw = rawValue;
+          const unpadded = raw.replace(/^0+/, '');
+          const padded = raw.padStart(8, '0');
+          const numericStr = !isNaN(parseInt(raw, 10)) ? parseInt(raw, 10).toString() : null;
+
           if (name && name !== 'N/A') {
-            workerMap.set(normalizeDni(w.dni), name);
-            workerMap.set(w.dni.toString().trim(), name);
+            const upperName = name.toUpperCase();
+            workerMap.set(normalized, name);
+            workerMap.set(raw, name);
+            workerMap.set(unpadded, name);
+            workerMap.set(padded, name);
+            if (numericStr) workerMap.set(numericStr, name);
+            
+            if (phone && phone !== 'N/A' && phone !== '') {
+              namePhoneMap.set(upperName, phone);
+            }
+          }
+          if (phone && phone !== 'N/A' && phone !== '') {
+            phoneMap.set(normalized, phone);
+            phoneMap.set(raw, phone);
+            phoneMap.set(unpadded, phone);
+            phoneMap.set(padded, phone);
+            if (numericStr) phoneMap.set(numericStr, phone);
           }
         });
 
@@ -419,28 +487,58 @@ export default function ProgramaCaporalDashboard() {
           const normalizedDniVal = normalizeDni(p.dni);
           const rawDniVal = p.dni.toString().trim();
           const unpaddedDni = rawDniVal.replace(/^0+/, '');
+          const numericDni = !isNaN(parseInt(rawDniVal, 10)) ? parseInt(rawDniVal, 10).toString() : null;
           
           let name = workerMap.get(normalizedDniVal) || 
                      workerMap.get(rawDniVal) || 
-                     workerMap.get(unpaddedDni);
+                     workerMap.get(unpaddedDni) ||
+                     (numericDni ? workerMap.get(numericDni) : null);
 
           // If still N/A, try to find in workerData again with more variations
           if (!name || name === 'N/A') {
-            const foundWorker = workerData.find(w => 
-              normalizeDni(w.dni) === normalizedDniVal || 
-              w.dni.toString().trim() === rawDniVal ||
-              w.dni.toString().trim().replace(/^0+/, '') === unpaddedDni
-            );
+            const foundWorker = workerData.find(w => {
+              const wd = w.dni?.toString().trim();
+              return normalizeDni(wd) === normalizedDniVal || 
+                     wd === rawDniVal ||
+                     wd?.replace(/^0+/, '') === unpaddedDni ||
+                     (!isNaN(parseInt(wd || '', 10)) && parseInt(wd || '', 10).toString() === numericDni);
+            });
             if (foundWorker) name = foundWorker.trabajador;
           }
 
           const lastInfo = lastDateMap.get(normalizedDniVal);
+          let phone = phoneMap.get(normalizedDniVal) || 
+                        phoneMap.get(rawDniVal) || 
+                        phoneMap.get(unpaddedDni) ||
+                        (numericDni ? phoneMap.get(numericDni) : null);
+
+          // Second pass: by name fallback (if we found a name but no phone by DNI)
+          if ((!phone || phone === 'N/A') && name && name !== 'N/A') {
+            phone = namePhoneMap.get(name.toUpperCase());
+          }
+
+          // Third pass: if phone not found, check workerData array directly (defensive)
+          if (!phone || phone === 'N/A') {
+            const fw = workerData.find(w => {
+              const wd = w.dni?.toString().trim();
+              const wn = w.trabajador?.toString().trim().toUpperCase();
+              return wd === rawDniVal || 
+                     normalizeDni(wd) === normalizedDniVal || 
+                     wd?.replace(/^0+/, '') === unpaddedDni ||
+                     (!isNaN(parseInt(wd || '', 10)) && parseInt(wd || '', 10).toString() === numericDni) ||
+                     (name && wn === name.toUpperCase());
+            });
+            if (fw && fw.telefono_principal && fw.telefono_principal !== 'N/A' && fw.telefono_principal !== '') {
+              phone = fw.telefono_principal.toString().trim();
+            }
+          }
 
           return {
             ...p,
             dni: normalizedDniVal,
             t_trabajador: {
-              trabajador: name || 'N/A'
+              trabajador: name || 'N/A',
+              telefono_principal: phone || null
             },
             lastDate: lastInfo?.fecha || null,
             lastFundo: lastInfo?.fundo || null,
@@ -839,6 +937,45 @@ export default function ProgramaCaporalDashboard() {
     };
   }, [workerHistory]);
 
+  const handleExportExcel = () => {
+    const exportData = sortedMembers.map(member => ({
+      'TRABAJADOR': member.t_trabajador?.trabajador || 'N/A',
+      'DNI': normalizeDni(member.dni),
+      'TELÉFONO': member.t_trabajador?.telefono_principal || '',
+      'ESTADO': member.status.toUpperCase(),
+      'ÚLTIMO REGISTRO': member.lastDate ? format(parseISO(member.lastDate), 'dd/MM/yyyy') : 'N/A',
+      'DÍAS DE FALTA': member.diffDays || 0,
+      'ÚLTIMO FUNDO': member.lastFundo || 'N/A',
+      'LOTE': member.lastLote || 'N/A',
+      'ACTIVIDAD': member.lastActividad || 'N/A',
+      'DÍAS CAPORAL': member.dias_caporal || 0,
+      'DÍAS ASISTENCIA': member.dias_asistencia || 0
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    
+    // Auto-size columns
+    const colWidths = [
+      { wch: 40 }, // Trabajador
+      { wch: 12 }, // DNI
+      { wch: 15 }, // Teléfono
+      { wch: 15 }, // Estado
+      { wch: 18 }, // Último Registro
+      { wch: 15 }, // Días de Falta
+      { wch: 20 }, // Último Fundo
+      { wch: 12 }, // Lote
+      { wch: 30 }, // Actividad
+      { wch: 15 }, // Días Caporal
+      { wch: 15 }  // Días Asistencia
+    ];
+    ws['!cols'] = colWidths;
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Programa Caporal");
+    
+    XLSX.writeFile(wb, `Seguimiento_Caporal_${format(new Date(), 'yyyyMMdd_HHmm')}.xlsx`);
+  };
+
   const totalPages = Math.ceil(sortedMembers.length / itemsPerPage);
 
   if (loading) {
@@ -1096,6 +1233,16 @@ export default function ProgramaCaporalDashboard() {
                     <SelectItem value="ausente">Ausentes 2026</SelectItem>
                   </SelectContent>
                 </Select>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="h-9 text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 transition-colors"
+                  onClick={handleExportExcel}
+                  disabled={sortedMembers.length === 0}
+                >
+                  <Download className="w-3.5 h-3.5 mr-2" />
+                  Excel
+                </Button>
                 <div className="flex items-center gap-2 bg-white/50 px-2 py-1 rounded-md border border-slate-200">
                   <span className="text-[10px] text-muted-foreground uppercase font-bold">Mostrar</span>
                   <Select
@@ -1147,7 +1294,17 @@ export default function ProgramaCaporalDashboard() {
                           <TableCell className="py-4 px-6 border-r border-slate-50">
                             <div className="flex flex-col">
                               <span className="font-bold text-sm text-slate-900 leading-tight group-hover:text-primary transition-colors">{member.t_trabajador?.trabajador || 'N/A'}</span>
-                              <span className="text-[10px] text-slate-500 font-mono mt-1.5 bg-slate-100 group-hover:bg-white w-fit px-2 py-0.5 rounded-full border border-slate-200 transition-colors">{normalizeDni(member.dni)}</span>
+                              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                <span className="text-[10px] text-slate-500 font-mono bg-slate-100 group-hover:bg-white w-fit px-2 py-0.5 rounded-full border border-slate-200 transition-colors uppercase tracking-tight">
+                                  {normalizeDni(member.dni)}
+                                </span>
+                                {member.t_trabajador?.telefono_principal && (
+                                  <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 group-hover:bg-white w-fit px-2 py-0.5 rounded-full border border-emerald-100 transition-colors flex items-center gap-1 shadow-sm">
+                                    <Phone className="w-2.5 h-2.5" />
+                                    {member.t_trabajador.telefono_principal}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </TableCell>
                           <TableCell className="py-4 px-6 border-r border-slate-50">
@@ -1362,10 +1519,16 @@ export default function ProgramaCaporalDashboard() {
                   <DialogTitle className="text-xl font-black tracking-tight uppercase">
                     {selectedWorkerForDetail?.t_trabajador?.trabajador}
                   </DialogTitle>
-                  <DialogDescription className="text-slate-400 font-bold text-xs mt-1 flex items-center gap-2">
-                    <span className="bg-slate-800 px-2 py-0.5 rounded border border-slate-700">DNI: {normalizeDni(selectedWorkerForDetail?.dni || '')}</span>
+                  <DialogDescription className="text-slate-400 font-bold text-xs mt-1 flex items-center gap-2 flex-wrap">
+                    <span className="bg-slate-800 px-2 py-0.5 rounded border border-slate-700 whitespace-nowrap">DNI: {normalizeDni(selectedWorkerForDetail?.dni || '')}</span>
+                    {selectedWorkerForDetail?.t_trabajador?.telefono_principal && (
+                      <span className="bg-emerald-950/50 text-emerald-400 px-2 py-0.5 rounded border border-emerald-800/50 flex items-center gap-1.5 whitespace-nowrap">
+                        <Phone className="w-3 h-3" />
+                        {selectedWorkerForDetail.t_trabajador.telefono_principal}
+                      </span>
+                    )}
                     <span className="text-primary">•</span>
-                    <span>HISTORIAL ÚLTIMOS 15 DÍAS</span>
+                    <span className="whitespace-nowrap uppercase tracking-tight">HISTORIAL ÚLTIMOS 15 DÍAS</span>
                   </DialogDescription>
                 </div>
               </div>

@@ -1,5 +1,5 @@
 {
-  "name": "Agritracer Hours Dashboard",
+  "name": "SEGUIMIENTO CAPORAL",
   "description": "A comprehensive dashboard to visualize and analyze metrics from the rpt_horas_agritracer table in Supabase, featuring real-time charts and detailed data views.",
   "requestFramePermissions": [],
   "majorCapabilities": []
